@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +14,7 @@ def _epoch_ms(ms: int | None) -> str:
     if not ms:
         return ""
     try:
-        return datetime.utcfromtimestamp(ms / 1000).isoformat()
+        return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).isoformat()
     except Exception:
         return str(ms)
 
