@@ -180,6 +180,16 @@ export async function loadAnalysisResults(caseId) {
       const card = document.createElement("div");
       card.className = "analysis-card";
 
+      // Use server-parsed result if available, otherwise try client-side parse
+      let parsed = r.result_parsed || null;
+      if (!parsed) {
+        try { parsed = JSON.parse((r.result || "").trim()); } catch (_) {}
+      }
+
+      const conf = parsed
+        ? _jsonRiskLevel(parsed)
+        : _extractConfidence(r.result || "");
+
       const header = document.createElement("div");
       header.className = "analysis-card-header open";
       header.addEventListener("click", () => {
@@ -190,7 +200,6 @@ export async function loadAnalysisResults(caseId) {
       const title = document.createElement("h3");
       title.textContent = r.artifact_key;
 
-      const conf = _extractConfidence(r.result || "");
       const meta = document.createElement("span");
       meta.style.cssText = "font-size:0.75rem;color:var(--text-muted);display:flex;align-items:center;gap:6px";
       meta.innerHTML = `${conf ? `<span class="confidence-inline ${_confidenceClass(conf)}">${conf}</span>` : ""}${r.provider || ""} · ${r.created_at ? r.created_at.slice(0, 16) : ""}`;
@@ -204,8 +213,14 @@ export async function loadAnalysisResults(caseId) {
       header.appendChild(chevron);
 
       const body = document.createElement("div");
-      body.className = "analysis-card-body markdown-output";
-      body.appendChild(markdownToFragment(r.result || "(no result)"));
+      body.className = "analysis-card-body";
+
+      if (parsed) {
+        _renderJsonAnalysis(parsed, body);
+      } else {
+        body.classList.add("markdown-output");
+        body.appendChild(markdownToFragment(r.result || "(no result)"));
+      }
 
       card.appendChild(header);
       card.appendChild(body);
@@ -216,11 +231,123 @@ export async function loadAnalysisResults(caseId) {
   }
 }
 
+function _renderJsonAnalysis(p, container) {
+  const esc = s => String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+  // Risk summary banner
+  const rsum = p.risk_level_summary || p.summary || "";
+  if (rsum) {
+    const banner = document.createElement("div");
+    banner.className = "analysis-risk-banner";
+    banner.innerHTML = `<p>${esc(rsum)}</p>`;
+    container.appendChild(banner);
+  }
+
+  // Conversation risk assessment
+  const cra = Array.isArray(p.conversation_risk_assessment) ? p.conversation_risk_assessment : [];
+  if (cra.length) {
+    const label = document.createElement("div");
+    label.className = "analysis-section-label";
+    label.textContent = "Conversation Risk Assessment";
+    container.appendChild(label);
+
+    cra.forEach(t => {
+      const rl = (t.risk_level || "").toUpperCase();
+      const rs = parseInt(t.risk_score || 0, 10);
+      const scoreClass = rs >= 7 ? "score-high" : rs >= 4 ? "score-medium" : "score-low";
+
+      const tc = document.createElement("div");
+      tc.className = "analysis-thread-card";
+      tc.innerHTML = `
+        <div class="atc-header">
+          <span class="atc-thread-id">${esc(t.thread_id || "—")}</span>
+          ${rl ? `<span class="confidence-inline ${_confidenceClass(rl)}">${rl}</span>` : ""}
+        </div>
+        <div class="risk-bar-wrap">
+          <div class="risk-bar-track"><div class="risk-bar-fill ${scoreClass}" style="width:${Math.min(rs*10,100)}%"></div></div>
+          <span class="risk-score-num">${rs}/10</span>
+        </div>
+        <div class="atc-stats">
+          &#128172; <strong>${t.messages||0}</strong> msgs &nbsp;·&nbsp;
+          ↑ <strong>${t.sent||0}</strong> sent &nbsp;·&nbsp;
+          ↓ <strong>${t.received||0}</strong> recv
+        </div>
+        ${(t.key_indicators||[]).length ? `<ul class="atc-indicators">${(t.key_indicators||[]).map(i=>`<li>${esc(i)}</li>`).join("")}</ul>` : ""}
+      `;
+      container.appendChild(tc);
+    });
+  }
+
+  // Key findings
+  const kf = p.key_findings;
+  if (kf) {
+    const label = document.createElement("div");
+    label.className = "analysis-section-label";
+    label.style.marginTop = "12px";
+    label.textContent = "Key Findings";
+    container.appendChild(label);
+
+    (kf.top_significant_conversations || []).forEach(tc => {
+      const block = document.createElement("div");
+      block.className = "analysis-finding-block";
+      let inner = `<div class="afb-thread">${esc(tc.thread_id||"")}</div>
+                   <div class="afb-summary">${esc(tc.summary||"")}</div>`;
+      (tc.key_messages||[]).forEach(km => {
+        inner += `<div class="afb-msg"><div class="afb-msg-meta">${esc(km.timestamp||"")} · ${esc(km.direction||"")}</div><div>${esc(km.body||"")}</div></div>`;
+      });
+      block.innerHTML = inner;
+      container.appendChild(block);
+    });
+
+    if (kf.note) {
+      const note = document.createElement("div");
+      note.className = "analysis-note";
+      note.textContent = kf.note;
+      container.appendChild(note);
+    }
+  }
+
+  // Remaining keys — generic kv
+  const shown = new Set(["conversation_risk_assessment","key_findings","risk_level_summary","summary","risk_level","confidence_level"]);
+  const extra = Object.entries(p).filter(([k]) => !shown.has(k));
+  if (extra.length) {
+    const grid = document.createElement("div");
+    grid.className = "analysis-kv-grid";
+    extra.forEach(([k, v]) => {
+      const key = document.createElement("span");
+      key.className = "akg-key";
+      key.textContent = k.replace(/_/g, " ");
+      const val = document.createElement("span");
+      val.className = "akg-val";
+      val.textContent = typeof v === "object" ? JSON.stringify(v) : String(v);
+      grid.appendChild(key);
+      grid.appendChild(val);
+    });
+    container.appendChild(grid);
+  }
+}
+
 function _extractConfidence(text) {
   const m = String(text || "").match(/\b(CRITICAL|HIGH|MEDIUM|LOW)\b/i);
   return m ? m[1].toUpperCase() : null;
 }
 
 function _confidenceClass(level) {
-  return { CRITICAL: "confidence-critical", HIGH: "confidence-high", MEDIUM: "confidence-medium", LOW: "confidence-low" }[level] || "";
+  return { CRITICAL: "confidence-critical", HIGH: "confidence-high", MEDIUM: "confidence-medium", LOW: "confidence-low" }[(level||"").toUpperCase()] || "";
+}
+
+function _jsonRiskLevel(p) {
+  const rsum = p.risk_level_summary || p.risk_level || p.confidence_level || "";
+  const m = String(rsum).match(/\b(CRITICAL|HIGH|MEDIUM|LOW)\b/i);
+  if (m) return m[1].toUpperCase();
+  // Check conversation_risk_assessment for the highest level
+  const cra = p.conversation_risk_assessment || [];
+  const order = ["CRITICAL","HIGH","MEDIUM","LOW"];
+  let top = null;
+  cra.forEach(t => {
+    const lvl = (t.risk_level||"").toUpperCase();
+    const idx = order.indexOf(lvl);
+    if (idx !== -1 && (top === null || idx < order.indexOf(top))) top = lvl;
+  });
+  return top;
 }

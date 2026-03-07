@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import json
+import re as _re
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, render_template
 
 from app.database import get_db
 from app.rtl_support import augment_report_context
+from app.routes.analysis import _safe_json_parse
 
 bp_reports = Blueprint("reports", __name__, url_prefix="/api")
 
@@ -43,11 +45,17 @@ def get_report(case_id: str):
         (case_id,),
     ).fetchall()
 
-    analysis = db.execute(
+    analysis_rows = db.execute(
         "SELECT artifact_key, result, provider, created_at "
         "FROM analysis_results WHERE case_id=? ORDER BY created_at ASC",
         (case_id,),
     ).fetchall()
+
+    analysis = []
+    for r in analysis_rows:
+        row = dict(r)
+        row["result_parsed"] = _safe_json_parse(row.get("result") or "", _re)
+        analysis.append(row)
 
     stats = {
         "messages": len(messages),

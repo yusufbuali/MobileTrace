@@ -8,219 +8,467 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #ffffff; --text: #1f2328; --text-muted: #656d76;
-      --border: #d0d7de; --surface: #f6f8fa; --accent: #0969da;
-      --danger: #d1242f; --warning: #9a6700; --success: #1a7f37;
-      --font: 'Segoe UI', system-ui, sans-serif; --radius: 6px;
+      --bg: #0b1018;
+      --panel: #141d2a;
+      --panel-alt: #1b2638;
+      --border: #2d3a4c;
+      --text: #e6edf7;
+      --muted: #9fb1c7;
+      --accent: #57b3ff;
+      --success: #22c55e;
+      --danger: #f04438;
+      --warning: #facc15;
+      --critical: #ef4444;
+      --high: #ff7a45;
+      --medium: #facc15;
+      --low: #60a5fa;
+      --font: 'Segoe UI', 'Helvetica Neue', system-ui, sans-serif;
+      --radius: 10px;
     }
-    body { background: var(--bg); color: var(--text); font-family: var(--font);
-           font-size: 13px; line-height: 1.6; padding: 32px; max-width: 1100px; margin: 0 auto; }
-    h1 { font-size: 1.6rem; margin-bottom: 4px; }
-    h2 { font-size: 1.15rem; margin: 24px 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
-    h3 { font-size: 1rem; margin: 16px 0 8px; color: var(--accent); }
-    .report-header { border-bottom: 2px solid var(--border); padding-bottom: 20px; margin-bottom: 24px; }
-    .report-header .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-top: 4px; }
-    .meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin: 16px 0; }
-    .meta-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; }
-    .meta-card .label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-    .meta-card .value { font-size: 1.3rem; font-weight: 700; color: var(--accent); }
-    .device-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 16px; }
-    .device-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
-    .device-table td:first-child { color: var(--text-muted); width: 160px; font-weight: 500; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-bottom: 20px; }
-    thead th { background: var(--surface); padding: 8px 10px; border-bottom: 2px solid var(--border);
-               text-align: left; font-weight: 600; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; }
-    tbody td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-    tbody tr:hover { background: var(--surface); }
-    .badge { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 0.7rem; font-weight: 600; }
-    .badge-in { background: #dafbe1; color: var(--success); }
-    .badge-out { background: #ddf4ff; color: #0550ae; }
-    .badge-missed { background: #fff1e5; color: var(--warning); }
-    .badge-sms { background: #f0f7ff; color: var(--accent); }
-    .badge-whatsapp { background: #dafbe1; color: var(--success); }
-    .badge-telegram { background: #ddf4ff; color: #0550ae; }
-    .badge-signal { background: #f0f7ff; color: #6e40c9; }
-    .analysis-block { background: var(--surface); border: 1px solid var(--border);
-                      border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
-    .analysis-block h3 { margin-top: 0; }
-    .analysis-text { white-space: pre-wrap; font-size: 0.82rem; line-height: 1.7; }
-    .graph-container { border: 1px solid var(--border); border-radius: var(--radius);
-                       background: var(--surface); height: 420px; margin-bottom: 24px; position: relative; }
-    .evidence-hash, .ip-address, code, pre { direction: ltr; unicode-bidi: embed; text-align: left; }
+    body {
+      background:
+        radial-gradient(circle at 15% 0%, #1e3050 0%, transparent 45%),
+        radial-gradient(circle at 85% 5%, #1a2b42 0%, transparent 40%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      line-height: 1.6;
+      padding: 28px 24px;
+    }
+    .shell { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+    /* ── Panels ───────────────────────────────────────────────── */
+    .panel {
+      background: linear-gradient(180deg, rgba(255,255,255,0.025) 0%, transparent 100%), var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.22);
+    }
+    .panel-alt { background: var(--panel-alt); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+
+    /* ── Typography ───────────────────────────────────────────── */
+    h1 { font-size: 1.7rem; letter-spacing: 0.01em; color: #f0f6ff; }
+    h2 { font-size: 1.1rem; color: #d8e6ff; margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 0.95rem; color: var(--accent); margin: 14px 0 6px; }
+    .section-label {
+      font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--muted); margin-bottom: 12px;
+    }
+
+    /* ── Report header ────────────────────────────────────────── */
+    .report-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; }
+    .report-title-block h1 { margin-bottom: 4px; }
+    .report-subtitle { color: var(--muted); font-size: 0.82rem; margin-top: 4px; }
+    .report-classification {
+      padding: 6px 16px; border-radius: 20px; font-size: 0.75rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      border: 1px solid rgba(87,179,255,0.35); color: var(--accent);
+      background: rgba(87,179,255,0.08); align-self: flex-start;
+    }
+
+    /* ── Stat cards ───────────────────────────────────────────── */
+    .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+    .stat-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(159,177,199,0.15);
+      border-radius: 8px; padding: 12px 14px;
+    }
+    .stat-card .sv { font-size: 1.8rem; font-weight: 700; color: var(--accent); line-height: 1; }
+    .stat-card .sl { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 4px; }
+
+    /* ── Key-value table ──────────────────────────────────────── */
+    .kv-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .kv-table td { padding: 7px 10px; border-bottom: 1px solid rgba(45,58,76,0.7); vertical-align: top; }
+    .kv-table td:first-child { color: var(--muted); width: 160px; font-weight: 500; white-space: nowrap; }
+    .kv-table tr:last-child td { border-bottom: none; }
+
+    /* ── Data tables ──────────────────────────────────────────── */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    .data-table thead th {
+      background: rgba(255,255,255,0.04); color: var(--muted); padding: 8px 10px;
+      border-bottom: 1px solid var(--border); text-align: left;
+      font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;
+    }
+    .data-table tbody td { padding: 7px 10px; border-bottom: 1px solid rgba(45,58,76,0.5); vertical-align: top; }
+    .data-table tbody tr:hover td { background: rgba(255,255,255,0.02); }
+    .data-table tbody tr:last-child td { border-bottom: none; }
+
+    /* ── Badges ───────────────────────────────────────────────── */
+    .badge { display: inline-block; padding: 1px 7px; border-radius: 6px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
+    .badge-in { background: #0d2e1b; color: var(--success); }
+    .badge-out { background: #0d1e35; color: var(--accent); }
+    .badge-missed { background: #2a1f00; color: var(--warning); }
+    .badge-whatsapp { background: #0a2016; color: #25d366; }
+    .badge-telegram { background: #081830; color: #29b6f6; }
+    .badge-signal { background: #160f2e; color: #9575cd; }
+    .badge-sms { background: #0d1e35; color: var(--accent); }
+
+    /* Risk level badges */
+    .risk-badge { display:inline-flex; align-items:center; gap:5px; padding:2px 10px; border-radius:6px; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; }
+    .risk-CRITICAL { background:#3d0a0a; color:var(--critical); border:1px solid rgba(239,68,68,0.35); }
+    .risk-HIGH { background:#2d1800; color:var(--high); border:1px solid rgba(255,122,69,0.35); }
+    .risk-MEDIUM { background:#2a2000; color:var(--medium); border:1px solid rgba(250,204,21,0.35); }
+    .risk-LOW { background:#0d1e35; color:var(--low); border:1px solid rgba(96,165,250,0.35); }
+
+    /* ── Risk score bar ───────────────────────────────────────── */
+    .risk-bar-wrap { display:flex; align-items:center; gap:10px; margin:6px 0; }
+    .risk-bar-track { flex:1; height:6px; background:rgba(255,255,255,0.07); border-radius:3px; overflow:hidden; }
+    .risk-bar-fill { height:100%; border-radius:3px; transition:width 0.4s ease; }
+    .risk-bar-fill.score-high { background: linear-gradient(90deg, #ff7a45, #ef4444); }
+    .risk-bar-fill.score-medium { background: linear-gradient(90deg, #facc15, #ff7a45); }
+    .risk-bar-fill.score-low { background: linear-gradient(90deg, #60a5fa, #22c55e); }
+    .risk-score-num { font-size:0.8rem; font-weight:700; color:var(--text); min-width:28px; text-align:right; }
+
+    /* ── Analysis details cards ───────────────────────────────── */
+    details.analysis-card {
+      border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--panel-alt); overflow: hidden; margin-bottom: 10px;
+    }
+    details.analysis-card summary {
+      cursor: pointer; list-style: none; display: flex; justify-content: space-between;
+      align-items: center; gap: 12px; padding: 13px 16px; font-weight: 600;
+      background: rgba(255,255,255,0.025);
+    }
+    details.analysis-card summary::-webkit-details-marker { display: none; }
+    details.analysis-card summary::after { content: '▾'; font-size: 0.8rem; color: var(--muted); transition: transform 0.2s; flex-shrink:0; }
+    details.analysis-card[open] summary::after { transform: rotate(180deg); }
+    .analysis-body { padding: 14px 16px; }
+    .summary-left { display:flex; align-items:center; gap:10px; }
+    .summary-provider { font-size:0.72rem; color:var(--muted); }
+
+    /* Thread risk card */
+    .thread-card {
+      background: rgba(0,0,0,0.15); border: 1px solid rgba(45,58,76,0.8);
+      border-radius: 8px; padding: 12px 14px; margin-bottom: 10px;
+    }
+    .thread-id { font-family: 'Consolas', monospace; font-size: 0.8rem; color: var(--muted); word-break: break-all; }
+    .thread-stats { display:flex; gap:14px; margin:6px 0; font-size:0.78rem; color:var(--muted); }
+    .thread-stats span strong { color: var(--text); }
+    .indicators-list { margin: 8px 0 0; padding-left: 18px; }
+    .indicators-list li { font-size:0.8rem; margin-bottom:4px; color: var(--text); }
+
+    /* Key findings block */
+    .findings-block { background: rgba(87,179,255,0.05); border: 1px solid rgba(87,179,255,0.2); border-radius:8px; padding:12px 14px; margin-top:10px; }
+    .findings-block p { font-size:0.82rem; color:var(--text); margin:0; line-height:1.6; }
+    .key-message { background: rgba(0,0,0,0.2); border-left:3px solid var(--high); border-radius:4px; padding:6px 10px; margin:6px 0; font-size:0.78rem; }
+    .key-message .km-time { color:var(--muted); font-size:0.72rem; margin-bottom:2px; }
+
+    /* Generic JSON block */
+    .json-section { margin-top:10px; }
+    .json-section-title { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); font-weight:700; margin-bottom:6px; }
+    .json-kv { display:grid; grid-template-columns:180px 1fr; gap:2px 10px; font-size:0.8rem; }
+    .json-kv .jk { color:var(--muted); }
+    .json-kv .jv { color:var(--text); word-break:break-word; }
+    pre.json-raw { background: rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:8px; padding:12px; font-size:0.75rem; overflow-x:auto; white-space:pre-wrap; color:var(--muted); font-family:'Consolas',monospace; }
+
+    /* Risk summary banner */
+    .risk-summary-banner {
+      background: linear-gradient(135deg, rgba(45,24,0,0.8), rgba(29,16,0,0.6));
+      border: 1px solid rgba(255,122,69,0.3); border-radius:8px; padding:12px 16px; margin-bottom:12px;
+    }
+    .risk-summary-banner p { font-size:0.85rem; line-height:1.6; color:var(--text); }
+
+    /* ── Linkage graph ────────────────────────────────────────── */
+    .graph-container { border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel-alt); height: 420px; position: relative; overflow: hidden; }
+
+    /* ── RTL helpers ──────────────────────────────────────────── */
+    .evidence-hash, .ip-address, code, pre, .mono { direction: ltr; unicode-bidi: embed; text-align: left; font-family: 'Consolas', monospace; }
+
+    /* ── Print ────────────────────────────────────────────────── */
     @media print {
-      body { padding: 16px; font-size: 11px; }
+      body { padding: 12px; font-size: 11px; background: #fff; color: #000; }
+      .panel, .panel-alt { background: #fff; box-shadow: none; border-color: #ccc; }
       .graph-container { page-break-inside: avoid; }
       h2 { page-break-after: avoid; }
     }
   </style>
 </head>
 <body>
+<div class="shell">
 
-  <!-- Report Header -->
-  <div class="report-header">
-    <h1>&#128241; MobileTrace Forensic Report</h1>
-    <div class="subtitle">Generated: {{ generated_at }} &nbsp;|&nbsp; Case: {{ case.case_number or '—' }}</div>
+  <!-- ── Report Header ──────────────────────────────────────────────────────── -->
+  <div class="panel">
+    <div class="report-header">
+      <div class="report-title-block">
+        <h1>&#128241; MobileTrace Forensic Report</h1>
+        <div class="report-subtitle">Generated: {{ generated_at }} &nbsp;·&nbsp; Case: {{ case.case_number or '—' }}</div>
+      </div>
+      <div class="report-classification">Forensic Evidence</div>
+    </div>
   </div>
 
-  <!-- Case Info -->
-  <h2>Case Information</h2>
-  <div class="meta-grid">
-    <div class="meta-card"><div class="label">Messages</div><div class="value">{{ stats.messages }}</div></div>
-    <div class="meta-card"><div class="label">Contacts</div><div class="value">{{ stats.contacts }}</div></div>
-    <div class="meta-card"><div class="label">Calls</div><div class="value">{{ stats.calls }}</div></div>
-    <div class="meta-card"><div class="label">Analyses</div><div class="value">{{ stats.analyses }}</div></div>
+  <!-- ── Case Information ───────────────────────────────────────────────────── -->
+  <div class="panel">
+    <h2>Case Information</h2>
+    <div class="stat-row" style="margin-bottom:16px">
+      <div class="stat-card"><div class="sv">{{ stats.messages }}</div><div class="sl">Messages</div></div>
+      <div class="stat-card"><div class="sv">{{ stats.contacts }}</div><div class="sl">Contacts</div></div>
+      <div class="stat-card"><div class="sv">{{ stats.calls }}</div><div class="sl">Calls</div></div>
+      <div class="stat-card"><div class="sv">{{ stats.analyses }}</div><div class="sl">Analyses</div></div>
+    </div>
+    <table class="kv-table">
+      <tbody>
+        <tr><td>Title</td><td>{{ case.title }}</td></tr>
+        <tr><td>Officer</td><td>{{ case.officer or '—' }}</td></tr>
+        <tr><td>Status</td><td>{{ case.status }}</td></tr>
+        <tr><td>Created</td><td>{{ case.created_at or '—' }}</td></tr>
+        {% for k, v in case.device_info.items() %}
+        <tr><td>{{ k | title }}</td><td>{{ v }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
-  <table class="device-table">
-    <tbody>
-      <tr><td>Title</td><td>{{ case.title }}</td></tr>
-      <tr><td>Officer</td><td>{{ case.officer or '—' }}</td></tr>
-      <tr><td>Status</td><td>{{ case.status }}</td></tr>
-      <tr><td>Created</td><td>{{ case.created_at or '—' }}</td></tr>
-      {% for k, v in case.device_info.items() %}
-      <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
 
-  <!-- AI Analysis Results -->
+  <!-- ── AI Analysis Results ────────────────────────────────────────────────── -->
   {% if analysis %}
-  <h2>AI Analysis Results</h2>
-  {% for a in analysis %}
-  <div class="analysis-block">
-    <h3>{{ a.artifact_key | title }} &nbsp;<small style="font-weight:400;color:var(--text-muted)">[{{ a.provider or '?' }}]</small></h3>
-    <div class="analysis-text">{{ a.result }}</div>
+  <div class="panel">
+    <h2>AI Analysis Results</h2>
+    {% for a in analysis %}
+    {% set p = a.result_parsed %}
+    <details class="analysis-card" open>
+      <summary>
+        <span class="summary-left">
+          <strong>{{ a.artifact_key | title }}</strong>
+          {% if p %}
+            {% set lvl = p.get('risk_level_summary', p.get('risk_level', p.get('confidence_level', ''))) %}
+            {% set lvl_word = lvl.split()[0].upper() if lvl else '' %}
+            {% if lvl_word in ['HIGH','CRITICAL','MEDIUM','LOW'] %}
+            <span class="risk-badge risk-{{ lvl_word }}">{{ lvl_word }}</span>
+            {% endif %}
+          {% endif %}
+        </span>
+        <span class="summary-provider">{{ a.provider or '' }} · {{ a.created_at[:16] if a.created_at else '' }}</span>
+      </summary>
+      <div class="analysis-body">
+        {% if p %}
+          {# ── Risk summary banner ── #}
+          {% set rsum = p.get('risk_level_summary') %}
+          {% if rsum %}
+          <div class="risk-summary-banner">
+            <p>{{ rsum }}</p>
+          </div>
+          {% endif %}
+
+          {# ── Conversation risk assessment ── #}
+          {% set cra = p.get('conversation_risk_assessment', []) %}
+          {% if cra %}
+          <div class="section-label" style="margin-bottom:8px">Conversation Risk Assessment</div>
+          {% for t in cra %}
+          {% set rl = t.get('risk_level', '') | upper %}
+          <div class="thread-card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px">
+              <span class="thread-id">{{ t.get('thread_id', '—') }}</span>
+              {% if rl %}<span class="risk-badge risk-{{ rl }}">{{ rl }}</span>{% endif %}
+            </div>
+            {% set rs = t.get('risk_score', 0) | int %}
+            <div class="risk-bar-wrap">
+              <div class="risk-bar-track">
+                <div class="risk-bar-fill {% if rs >= 7 %}score-high{% elif rs >= 4 %}score-medium{% else %}score-low{% endif %}"
+                     style="width:{{ (rs * 10) | int }}%"></div>
+              </div>
+              <span class="risk-score-num">{{ rs }}/10</span>
+            </div>
+            <div class="thread-stats">
+              <span>&#128172; <strong>{{ t.get('messages', '—') }}</strong> msgs</span>
+              <span>&#8593; <strong>{{ t.get('sent', '—') }}</strong> sent</span>
+              <span>&#8595; <strong>{{ t.get('received', '—') }}</strong> recv</span>
+            </div>
+            {% set ki = t.get('key_indicators', []) %}
+            {% if ki %}
+            <ul class="indicators-list">
+              {% for ind in ki %}<li>{{ ind }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+          </div>
+          {% endfor %}
+          {% endif %}
+
+          {# ── Key findings ── #}
+          {% set kf = p.get('key_findings') %}
+          {% if kf %}
+          <div class="section-label" style="margin-top:14px;margin-bottom:6px">Key Findings</div>
+          {% set top_convs = kf.get('top_significant_conversations', []) %}
+          {% for tc in top_convs %}
+          <div class="panel-alt" style="margin-bottom:8px;border-radius:8px;padding:10px 12px;">
+            <div style="font-size:0.82rem;font-weight:600;margin-bottom:4px;color:var(--accent)">{{ tc.get('thread_id','') }}</div>
+            <div style="font-size:0.8rem;color:var(--text);margin-bottom:6px">{{ tc.get('summary','') }}</div>
+            {% for km in tc.get('key_messages', []) %}
+            <div class="key-message">
+              <div class="km-time">{{ km.get('timestamp','') }} · {{ km.get('direction','') }}</div>
+              <div>{{ km.get('body','') }}</div>
+            </div>
+            {% endfor %}
+          </div>
+          {% endfor %}
+          {% set kf_note = kf.get('note') %}
+          {% if kf_note %}
+          <div class="findings-block"><p>{{ kf_note }}</p></div>
+          {% endif %}
+          {% endif %}
+
+          {# ── Fallback: render remaining top-level keys as kv ── #}
+          {% set shown_keys = ['conversation_risk_assessment','key_findings','risk_level_summary','risk_level','confidence_level'] %}
+          {% for k, v in p.items() %}
+          {% if k not in shown_keys %}
+          <div class="json-section">
+            <div class="json-section-title">{{ k | replace('_', ' ') }}</div>
+            {% if v is mapping %}
+              <div class="json-kv">
+              {% for sk, sv in v.items() %}
+                <span class="jk">{{ sk | replace('_',' ') }}</span><span class="jv">{{ sv }}</span>
+              {% endfor %}
+              </div>
+            {% elif v is iterable and v is not string %}
+              <ul class="indicators-list">{% for item in v %}<li>{{ item }}</li>{% endfor %}</ul>
+            {% else %}
+              <div style="font-size:0.82rem;color:var(--text)">{{ v }}</div>
+            {% endif %}
+          </div>
+          {% endif %}
+          {% endfor %}
+
+        {% else %}
+          {# ── Fallback: raw text ── #}
+          <pre class="json-raw">{{ a.result }}</pre>
+        {% endif %}
+      </div>
+    </details>
+    {% endfor %}
   </div>
-  {% endfor %}
   {% endif %}
 
-  <!-- Linkage Graph -->
-  <h2>Contact Linkage Graph</h2>
-  <div class="graph-container" id="graph"></div>
+  <!-- ── Contact Linkage Graph ──────────────────────────────────────────────── -->
+  <div class="panel">
+    <h2>Contact Linkage Graph</h2>
+    <div class="graph-container" id="graph"></div>
+  </div>
 
-  <!-- Messages -->
+  <!-- ── Messages ───────────────────────────────────────────────────────────── -->
   {% if messages %}
-  <h2>Messages ({{ messages | length }})</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Timestamp</th><th>Platform</th><th>Direction</th>
-        <th>From</th><th>To</th><th>Body</th>
-      </tr>
-    </thead>
-    <tbody>
-    {% for m in messages %}
-      <tr>
-        <td style="white-space:nowrap">{{ m.timestamp or '—' }}</td>
-        <td><span class="badge badge-{{ m.platform }}">{{ m.platform }}</span></td>
-        <td><span class="badge badge-{{ 'in' if m.direction == 'incoming' else 'out' }}">{{ m.direction }}</span></td>
-        <td>{{ m.sender or '—' }}</td>
-        <td>{{ m.recipient or '—' }}</td>
-        <td>{{ m.body or '' }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+  <div class="panel">
+    <h2>Messages ({{ messages | length }})</h2>
+    <div style="overflow-x:auto">
+    <table class="data-table">
+      <thead>
+        <tr><th>Timestamp</th><th>Platform</th><th>Dir</th><th>From</th><th>To</th><th>Body</th></tr>
+      </thead>
+      <tbody>
+      {% for m in messages %}
+        <tr>
+          <td style="white-space:nowrap" class="mono">{{ m.timestamp or '—' }}</td>
+          <td><span class="badge badge-{{ m.platform }}">{{ m.platform }}</span></td>
+          <td><span class="badge badge-{{ 'in' if m.direction == 'incoming' else 'out' }}">{{ '↓' if m.direction == 'incoming' else '↑' }}</span></td>
+          <td class="mono">{{ m.sender or '—' }}</td>
+          <td class="mono">{{ m.recipient or '—' }}</td>
+          <td>{{ m.body or '' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
   {% endif %}
 
-  <!-- Contacts -->
+  <!-- ── Contacts ───────────────────────────────────────────────────────────── -->
   {% if contacts %}
-  <h2>Contacts ({{ contacts | length }})</h2>
-  <table>
-    <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Source</th></tr></thead>
-    <tbody>
-    {% for c in contacts %}
-      <tr>
-        <td>{{ c.name or '—' }}</td>
-        <td class="evidence-hash">{{ c.phone or '—' }}</td>
-        <td>{{ c.email or '—' }}</td>
-        <td>{{ c.source_app or '—' }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+  <div class="panel">
+    <h2>Contacts ({{ contacts | length }})</h2>
+    <table class="data-table">
+      <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Source</th></tr></thead>
+      <tbody>
+      {% for c in contacts %}
+        <tr>
+          <td>{{ c.name or '—' }}</td>
+          <td class="mono">{{ c.phone or '—' }}</td>
+          <td class="mono">{{ c.email or '—' }}</td>
+          <td>{{ c.source_app or '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% endif %}
 
-  <!-- Call Logs -->
+  <!-- ── Call Logs ──────────────────────────────────────────────────────────── -->
   {% if calls %}
-  <h2>Call Logs ({{ calls | length }})</h2>
-  <table>
-    <thead><tr><th>Timestamp</th><th>Number</th><th>Direction</th><th>Duration (s)</th><th>Platform</th></tr></thead>
-    <tbody>
-    {% for c in calls %}
-      <tr>
-        <td style="white-space:nowrap">{{ c.timestamp or '—' }}</td>
-        <td class="evidence-hash">{{ c.number or '—' }}</td>
-        <td><span class="badge badge-{{ c.direction }}">{{ c.direction }}</span></td>
-        <td>{{ c.duration_s }}</td>
-        <td>{{ c.platform }}</td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+  <div class="panel">
+    <h2>Call Logs ({{ calls | length }})</h2>
+    <table class="data-table">
+      <thead><tr><th>Timestamp</th><th>Number</th><th>Direction</th><th>Duration (s)</th><th>Platform</th></tr></thead>
+      <tbody>
+      {% for c in calls %}
+        <tr>
+          <td class="mono" style="white-space:nowrap">{{ c.timestamp or '—' }}</td>
+          <td class="mono">{{ c.number or '—' }}</td>
+          <td><span class="badge badge-{{ c.direction }}">{{ c.direction }}</span></td>
+          <td>{{ c.duration_s }}</td>
+          <td><span class="badge badge-{{ c.platform }}">{{ c.platform }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% endif %}
 
-  <!-- D3 Linkage Graph -->
-  <script src="https://d3js.org/d3.v7.min.js"></script>
-  <script>
-    (function() {
-      const caseId = {{ case.id | tojson }};
-      fetch(`/api/cases/${caseId}/graph`)
-        .then(r => r.json())
-        .then(data => renderGraph(data))
-        .catch(() => {
-          document.getElementById("graph").innerHTML =
-            '<p style="padding:20px;color:#656d76">Graph data unavailable.</p>';
-        });
+</div><!-- /shell -->
 
-      function renderGraph({ nodes, edges }) {
-        if (!nodes || !nodes.length) {
-          document.getElementById("graph").innerHTML =
-            '<p style="padding:20px;color:#656d76">No contact linkage data.</p>';
-          return;
-        }
-        const container = document.getElementById("graph");
-        const W = container.clientWidth || 800, H = 420;
-        const svg = d3.select("#graph").append("svg")
-          .attr("width", W).attr("height", H);
+<!-- ── D3 Linkage Graph ────────────────────────────────────────────────────── -->
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+(function () {
+  const caseId = {{ case.id | tojson }};
+  fetch(`/api/cases/${caseId}/graph`)
+    .then(r => r.json())
+    .then(data => renderGraph(data))
+    .catch(() => {
+      document.getElementById('graph').innerHTML =
+        '<p style="padding:20px;color:#9fb1c7">Graph data unavailable.</p>';
+    });
 
-        const color = d3.scaleOrdinal()
-          .domain(["device", "contact", "number"])
-          .range(["#0969da", "#1a7f37", "#9a6700"]);
+  function renderGraph({ nodes, edges }) {
+    if (!nodes || !nodes.length) {
+      document.getElementById('graph').innerHTML =
+        '<p style="padding:20px;color:#9fb1c7">No contact linkage data.</p>';
+      return;
+    }
+    const container = document.getElementById('graph');
+    const W = container.clientWidth || 900, H = 420;
+    const svg = d3.select('#graph').append('svg').attr('width', W).attr('height', H);
 
-        const sim = d3.forceSimulation(nodes)
-          .force("link", d3.forceLink(edges).id(d => d.id).distance(80))
-          .force("charge", d3.forceManyBody().strength(-200))
-          .force("center", d3.forceCenter(W / 2, H / 2));
+    const color = d3.scaleOrdinal()
+      .domain(['device', 'contact', 'number'])
+      .range(['#57b3ff', '#22c55e', '#facc15']);
 
-        const link = svg.append("g").selectAll("line")
-          .data(edges).join("line")
-          .attr("stroke", "#d0d7de")
-          .attr("stroke-width", d => Math.max(1, Math.log(d.weight + 1)));
+    const sim = d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(edges).id(d => d.id).distance(90))
+      .force('charge', d3.forceManyBody().strength(-220))
+      .force('center', d3.forceCenter(W / 2, H / 2));
 
-        const node = svg.append("g").selectAll("circle")
-          .data(nodes).join("circle")
-          .attr("r", d => d.type === "device" ? 14 : 9)
-          .attr("fill", d => color(d.type))
-          .attr("stroke", "#fff").attr("stroke-width", 2)
-          .call(d3.drag()
-            .on("start", (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
-            .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
-            .on("end", (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+    const link = svg.append('g').selectAll('line').data(edges).join('line')
+      .attr('stroke', '#2d3a4c').attr('stroke-width', d => Math.max(1, Math.log(d.weight + 1)));
 
-        const label = svg.append("g").selectAll("text")
-          .data(nodes).join("text")
-          .text(d => d.label.length > 16 ? d.label.slice(0, 14) + "…" : d.label)
-          .attr("font-size", 10).attr("fill", "#1f2328")
-          .attr("dx", 12).attr("dy", 4);
+    const node = svg.append('g').selectAll('circle').data(nodes).join('circle')
+      .attr('r', d => d.type === 'device' ? 14 : 9)
+      .attr('fill', d => color(d.type))
+      .attr('stroke', '#0b1018').attr('stroke-width', 2)
+      .call(d3.drag()
+        .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+        .on('end', (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
 
-        sim.on("tick", () => {
-          link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
-              .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
-          node.attr("cx", d => d.x).attr("cy", d => d.y);
-          label.attr("x", d => d.x).attr("y", d => d.y);
-        });
-      }
-    })();
-  </script>
+    const label = svg.append('g').selectAll('text').data(nodes).join('text')
+      .text(d => d.label.length > 16 ? d.label.slice(0, 14) + '…' : d.label)
+      .attr('font-size', 10).attr('fill', '#9fb1c7').attr('dx', 14).attr('dy', 4);
+
+    sim.on('tick', () => {
+      link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+          .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+      node.attr('cx', d => d.x).attr('cy', d => d.y);
+      label.attr('x', d => d.x).attr('y', d => d.y);
+    });
+  }
+})();
+</script>
 </body>
 </html>

@@ -53,8 +53,6 @@ def trigger_analysis(case_id: str):
     config = current_app.config["MT_CONFIG"]
 
     def _run():
-        analyzer = MobileAnalyzer(config)
-
         def _callback(artifact_key: str, result: dict) -> None:
             _push_event(case_id, "artifact_done", {
                 "artifact_key": artifact_key,
@@ -63,6 +61,7 @@ def trigger_analysis(case_id: str):
             })
 
         try:
+            analyzer = MobileAnalyzer(config)
             analyzer.analyze_case(case_id, get_db(), callback=_callback)
             _push_event(case_id, "complete", {"case_id": case_id})
         except Exception as exc:
@@ -106,10 +105,35 @@ def analysis_stream(case_id: str):
 @bp_analysis.get("/cases/<case_id>/analysis")
 def get_analysis(case_id: str):
     """Return all analysis results for a case."""
+    import re as _re
     db = get_db()
     rows = db.execute(
         "SELECT artifact_key, result, provider, created_at FROM analysis_results "
         "WHERE case_id=? ORDER BY created_at ASC",
         (case_id,),
     ).fetchall()
-    return jsonify([dict(r) for r in rows])
+    out = []
+    for r in rows:
+        row = dict(r)
+        row["result_parsed"] = _safe_json_parse(row.get("result") or "", _re)
+        out.append(row)
+    return jsonify(out)
+
+
+def _safe_json_parse(s: str, re_mod) -> dict | None:
+    """Try JSON parse; on failure apply common LLM formatting fixes and retry."""
+    s = s.strip()
+    if not s:
+        return None
+    try:
+        return json.loads(s)
+    except Exception:
+        pass
+    # Fix {"key": "stringval": number} → {"key": "stringval"}
+    cleaned = re_mod.sub(r'":\s*"([^"\\]*)"\s*:\s*[\d.]+', r'": "\1"', s)
+    # Remove trailing commas before } or ]
+    cleaned = re_mod.sub(r',\s*([}\]])', r'\1', cleaned)
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        return None
