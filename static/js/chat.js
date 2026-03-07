@@ -3,6 +3,7 @@
  * Handles message sending, history rendering, and citations display.
  */
 import { apiFetch } from "./api.js";
+import { markdownToFragment, highlightConfidenceTokens } from "./markdown.js";
 
 let _activeCaseId = null;
 
@@ -146,10 +147,22 @@ export async function triggerAnalysis(caseId) {
     loadAnalysisResults(caseId);
   });
 
-  es.addEventListener("error", () => {
-    progressEl.textContent = "Analysis stream ended.";
+  // Named "error" event from server (e.g. missing API key)
+  es.addEventListener("error", (e) => {
+    if (e.data) {
+      try {
+        const d = JSON.parse(e.data);
+        progressEl.textContent = `Analysis failed: ${d.message || "Unknown error"}`;
+        progressEl.style.color = "var(--danger)";
+      } catch (_) {
+        progressEl.textContent = "Analysis failed.";
+        progressEl.style.color = "var(--danger)";
+      }
+    } else {
+      // Native EventSource connection error
+      progressEl.textContent = "Connection lost.";
+    }
     es.close();
-    loadAnalysisResults(caseId);
   });
 }
 
@@ -158,21 +171,49 @@ export async function loadAnalysisResults(caseId) {
   if (!resultsEl) return;
   try {
     const rows = await apiFetch(`/api/cases/${caseId}/analysis`);
-    resultsEl.innerHTML = rows.length
-      ? rows.map(r => `
-          <div class="analysis-card">
-            <div class="analysis-card-header" onclick="this.nextElementSibling.classList.toggle('collapsed')">
-              <h3>${r.artifact_key}</h3>
-              <span class="text-muted" style="font-size:0.75rem">${r.provider || ""} · ${r.created_at ? r.created_at.slice(0, 16) : ""}</span>
-            </div>
-            <div class="analysis-card-body">${_escapeHtml(r.result || "(no result)")}</div>
-          </div>`).join("")
-      : '<p class="muted">No analysis results yet. Click "Run Analysis" to start.</p>';
+    if (!rows.length) {
+      resultsEl.innerHTML = '<p class="muted">No analysis results yet. Click "Run Analysis" to start.</p>';
+      return;
+    }
+    resultsEl.innerHTML = "";
+    rows.forEach(r => {
+      const card = document.createElement("div");
+      card.className = "analysis-card";
+
+      const header = document.createElement("div");
+      header.className = "analysis-card-header";
+      header.style.cursor = "pointer";
+      header.addEventListener("click", () => body.classList.toggle("collapsed"));
+
+      const title = document.createElement("h3");
+      title.textContent = r.artifact_key;
+
+      const conf = _extractConfidence(r.result || "");
+      const meta = document.createElement("span");
+      meta.style.cssText = "font-size:0.75rem;color:var(--text-muted);display:flex;align-items:center;gap:6px";
+      meta.innerHTML = `${conf ? `<span class="confidence-inline ${_confidenceClass(conf)}">${conf}</span>` : ""}${r.provider || ""} · ${r.created_at ? r.created_at.slice(0, 16) : ""}`;
+
+      header.appendChild(title);
+      header.appendChild(meta);
+
+      const body = document.createElement("div");
+      body.className = "analysis-card-body markdown-output";
+      body.appendChild(markdownToFragment(r.result || "(no result)"));
+
+      card.appendChild(header);
+      card.appendChild(body);
+      resultsEl.appendChild(card);
+    });
   } catch (_) {
     resultsEl.innerHTML = '<p class="muted">Could not load analysis results.</p>';
   }
 }
 
-function _escapeHtml(s) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function _extractConfidence(text) {
+  const m = String(text || "").match(/\b(CRITICAL|HIGH|MEDIUM|LOW)\b/i);
+  return m ? m[1].toUpperCase() : null;
+}
+
+function _confidenceClass(level) {
+  return { CRITICAL: "confidence-critical", HIGH: "confidence-high", MEDIUM: "confidence-medium", LOW: "confidence-low" }[level] || "";
 }

@@ -1,5 +1,6 @@
 import { api, apiFetch } from "./api.js";
 import { initChat, triggerAnalysis, loadAnalysisResults } from "./chat.js";
+import { initConversations } from "./conversations.js";
 
 const caseList = document.getElementById("case-list");
 const searchInput = document.getElementById("search-cases");
@@ -69,6 +70,10 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     // Lazy-load analysis results when switching to analysis tab
     if (btn.dataset.tab === "tab-analysis" && activeCaseId) {
       loadAnalysisResults(activeCaseId);
+    }
+    // Load conversations when switching to conversations tab
+    if (btn.dataset.tab === "tab-conversations" && activeCaseId) {
+      initConversations(activeCaseId);
     }
   });
 });

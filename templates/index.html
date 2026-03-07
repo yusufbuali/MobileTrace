@@ -26,7 +26,51 @@
       </div>
       <div id="case-list"></div>
       <button id="btn-new-case" class="btn-primary">+ New Case</button>
+      <button id="btn-settings" class="btn-gear" title="AI Settings">&#9881; Settings</button>
     </aside>
+
+    <!-- Settings modal -->
+    <div id="settings-modal" class="modal-overlay" style="display:none">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3>AI Provider Settings</h3>
+          <button id="btn-settings-close" class="modal-close">&times;</button>
+        </div>
+        <form id="form-settings">
+          <label>Provider
+            <select id="settings-provider" name="provider">
+              <option value="claude">Claude (Anthropic)</option>
+              <option value="openai">OpenAI</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="local">Local (Ollama)</option>
+            </select>
+          </label>
+          <label>API Key
+            <input id="settings-api-key" type="password" name="api_key" placeholder="Leave blank to keep current" autocomplete="off" />
+          </label>
+          <div id="settings-model-row">
+            <label>Model
+              <!-- OpenRouter: dropdown populated from API -->
+              <select id="settings-model-select" style="display:none"></select>
+              <!-- Claude / OpenAI / Local: free text -->
+              <input id="settings-model" type="text" name="model" placeholder="e.g. claude-sonnet-4-6" />
+              <span id="settings-model-hint" class="settings-hint"></span>
+            </label>
+            <button type="button" id="btn-load-models" style="display:none" class="btn-secondary btn-sm">Load models</button>
+          </div>
+          <div id="settings-local-url-row">
+            <label>Base URL (Local/OpenRouter only)
+              <input id="settings-base-url" type="text" name="base_url" placeholder="http://localhost:11434/v1" />
+            </label>
+          </div>
+          <div class="modal-actions">
+            <button type="submit" class="btn-primary">Save</button>
+            <button type="button" id="btn-test-provider" class="btn-secondary">Test Connection</button>
+          </div>
+          <div id="settings-status" class="settings-status"></div>
+        </form>
+      </div>
+    </div>
 
     <!-- Main content -->
     <main id="main">
@@ -68,6 +112,7 @@
         <div class="tabs">
           <button class="tab-btn active" data-tab="tab-overview">Overview</button>
           <button class="tab-btn" data-tab="tab-evidence">Evidence</button>
+          <button class="tab-btn" data-tab="tab-conversations">Conversations</button>
           <button class="tab-btn" data-tab="tab-analysis">Analysis</button>
           <button class="tab-btn" data-tab="tab-chat">Chat</button>
         </div>
@@ -87,6 +132,21 @@
             <button type="submit" class="btn-primary">Upload &amp; Parse</button>
           </form>
           <div id="evidence-list" class="evidence-list"></div>
+        </div>
+
+        <!-- Conversations tab -->
+        <div id="tab-conversations" class="tab-panel">
+          <div class="conv-layout">
+            <div class="conv-sidebar">
+              <input id="conv-search" type="text" placeholder="Search messages&hellip;" />
+              <div id="conv-platform-pills" class="platform-pills"></div>
+              <div id="conv-thread-list" class="conv-thread-list"></div>
+            </div>
+            <div class="conv-main">
+              <div id="conv-header" class="conv-header"></div>
+              <div id="conv-messages" class="conv-messages"></div>
+            </div>
+          </div>
         </div>
 
         <!-- Analysis tab -->
@@ -120,5 +180,7 @@
   <script type="module" src="/static/js/api.js"></script>
   <script type="module" src="/static/js/cases.js"></script>
   <script type="module" src="/static/js/chat.js"></script>
+  <script type="module" src="/static/js/conversations.js"></script>
+  <script type="module" src="/static/js/settings.js"></script>
 </body>
 </html>
