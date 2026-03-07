@@ -64,3 +64,38 @@ def test_ufdr_parses_device_info(tmp_path):
     result = UfdrParser().parse(ufdr, dest)
     assert result.format == "ufdr"
     assert "Samsung" in result.device_info.get("model", "")
+
+
+# --- Task 10: XRY parser ---
+from app.parsers.xry_parser import XryParser
+
+
+def test_xry_can_handle_xrep_folder(tmp_path):
+    d = tmp_path / "xry_export"
+    d.mkdir()
+    (d / "report.xrep").write_text("<xml/>")
+    assert XryParser().can_handle(d)
+
+
+def test_xry_can_handle_xrep_zip(tmp_path):
+    z = tmp_path / "export.zip"
+    with zipfile.ZipFile(z, "w") as zf:
+        zf.writestr("report.xrep", "<xml/>")
+    assert XryParser().can_handle(z)
+
+
+def test_xry_parses_device_info_from_xrep(tmp_path):
+    xrep = tmp_path / "report.xrep"
+    xrep.write_text("""<?xml version="1.0"?>
+    <XRY>
+      <DeviceInfo>
+        <DeviceName>iPhone 14 Pro</DeviceName>
+        <IMEI>999888777666555</IMEI>
+        <OS>iOS 16.1</OS>
+      </DeviceInfo>
+    </XRY>""")
+    dest = tmp_path / "out"
+    dest.mkdir()
+    result = XryParser().parse(tmp_path, dest)
+    assert result.format == "xry"
+    assert "iPhone" in result.device_info.get("model", "")
