@@ -1,12 +1,15 @@
 """Case CRUD routes for MobileTrace."""
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime
+from pathlib import Path
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, current_app, jsonify, render_template, request
 
 from app.database import get_db
+from app.parsers.dispatcher import dispatch, detect_format
 
 bp_cases = Blueprint("cases", __name__, url_prefix="/api")
 
@@ -92,3 +95,85 @@ def delete_case(case_id: str):
     db.execute("DELETE FROM cases WHERE id=?", (case_id,))
     db.commit()
     return jsonify({"deleted": case_id})
+
+
+@bp_cases.post("/cases/<case_id>/evidence")
+def upload_evidence(case_id: str):
+    db = get_db()
+    row = db.execute("SELECT id FROM cases WHERE id=?", (case_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "case not found"}), 404
+
+    if "file" not in request.files:
+        return jsonify({"error": "no file uploaded"}), 400
+
+    f = request.files["file"]
+    cfg = current_app.config["MT_CONFIG"]
+    cases_dir = Path(cfg["server"]["cases_dir"])
+    case_dir = cases_dir / case_id
+    evidence_dir = case_dir / "evidence"
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_name = Path(f.filename).name
+    dest_path = evidence_dir / safe_name
+    f.save(dest_path)
+
+    fmt = detect_format(dest_path) or "unknown"
+    ev_id = str(uuid.uuid4())
+    db.execute(
+        "INSERT INTO evidence_files (id, case_id, format, source_path, parse_status) VALUES (?,?,?,?,?)",
+        (ev_id, case_id, fmt, str(dest_path), "parsing"),
+    )
+    db.commit()
+
+    try:
+        extract_dir = case_dir / "extracted"
+        parsed = dispatch(dest_path, extract_dir)
+        _store_parsed(db, case_id, parsed)
+        db.execute(
+            "UPDATE evidence_files SET parse_status='done', parsed_at=datetime('now') WHERE id=?",
+            (ev_id,),
+        )
+        db.execute(
+            "UPDATE cases SET device_info=?, updated_at=datetime('now') WHERE id=?",
+            (json.dumps(parsed.device_info), case_id),
+        )
+        db.commit()
+        return jsonify({
+            "evidence_id": ev_id,
+            "format": fmt,
+            "device_info": parsed.device_info,
+            "stats": {
+                "contacts": len(parsed.contacts),
+                "messages": len(parsed.messages),
+                "calls": len(parsed.call_logs),
+            },
+        }), 201
+    except Exception as exc:
+        db.execute(
+            "UPDATE evidence_files SET parse_status='error', parse_error=? WHERE id=?",
+            (str(exc), ev_id),
+        )
+        db.commit()
+        return jsonify({"error": str(exc)}), 422
+
+
+def _store_parsed(db, case_id: str, parsed) -> None:
+    """Insert ParsedCase artifacts into DB tables."""
+    for c in parsed.contacts:
+        db.execute(
+            "INSERT INTO contacts (case_id, name, phone, email, source_app, raw_json) VALUES (?,?,?,?,?,?)",
+            (case_id, c["name"], c["phone"], c["email"], c["source_app"], json.dumps(c["raw_json"])),
+        )
+    for m in parsed.messages:
+        db.execute(
+            "INSERT INTO messages (case_id, platform, direction, sender, recipient, body, timestamp, thread_id, raw_json) VALUES (?,?,?,?,?,?,?,?,?)",
+            (case_id, m["platform"], m["direction"], m["sender"], m["recipient"],
+             m["body"], m["timestamp"], m["thread_id"], json.dumps(m["raw_json"])),
+        )
+    for cl in parsed.call_logs:
+        db.execute(
+            "INSERT INTO call_logs (case_id, number, direction, duration_s, timestamp, platform) VALUES (?,?,?,?,?,?)",
+            (case_id, cl["number"], cl["direction"], cl["duration_s"], cl["timestamp"], cl["platform"]),
+        )
+    db.commit()
