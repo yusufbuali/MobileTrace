@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MobileTrace</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar -->
+    <aside id="sidebar">
+      <div class="brand">
+        <span class="brand-icon">&#128241;</span>
+        <span class="brand-name">MobileTrace</span>
+      </div>
+      <div class="sidebar-controls">
+        <input id="search-cases" type="text" placeholder="Search cases&hellip;" />
+        <select id="filter-status">
+          <option value="">All statuses</option>
+          <option value="open">Open</option>
+          <option value="in_review">In Review</option>
+          <option value="on_hold">On Hold</option>
+          <option value="closed">Closed</option>
+        </select>
+      </div>
+      <div id="case-list"></div>
+      <button id="btn-new-case" class="btn-primary">+ New Case</button>
+    </aside>
+
+    <!-- Main content -->
+    <main id="main">
+      <div id="view-welcome" class="view active">
+        <h1>Welcome to MobileTrace</h1>
+        <p>Select a case from the sidebar or create a new one to begin.</p>
+      </div>
+      <div id="view-new-case" class="view">
+        <h2>New Case</h2>
+        <form id="form-new-case">
+          <label>Case Number <input name="case_number" type="text" /></label>
+          <label>Officer Name <input name="officer" type="text" /></label>
+          <label>Title * <input name="title" type="text" required /></label>
+          <label>Description <textarea name="description"></textarea></label>
+          <label>Evidence File
+            <input name="evidence" type="file"
+              accept=".ufdr,.xrep,.zip,.ofb" />
+          </label>
+          <button type="submit" class="btn-primary">Create Case</button>
+          <button type="button" id="btn-cancel-case">Cancel</button>
+        </form>
+      </div>
+      <div id="view-case-dashboard" class="view">
+        <!-- Populated dynamically by dashboard.js (Phase 4) -->
+        <div id="dashboard-placeholder">
+          <p>Case dashboard will appear here after evidence is parsed.</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="/static/js/api.js"></script>
+  <script type="module" src="/static/js/cases.js"></script>
+</body>
+</html>
