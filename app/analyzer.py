@@ -115,8 +115,10 @@ class MobileAnalyzer:
                 # Persist to DB (best-effort)
                 try:
                     db.execute(
-                        "INSERT OR REPLACE INTO analysis_results (case_id, artifact_key, result) VALUES (?,?,?)",
-                        (case_id, artifact_key, result.get("result", result.get("error", ""))),
+                        "INSERT OR REPLACE INTO analysis_results (case_id, artifact_key, result, provider) VALUES (?,?,?,?)",
+                        (case_id, artifact_key,
+                         result.get("result", result.get("error", "")),
+                         result.get("provider", "")),
                     )
                     db.commit()
                 except Exception as exc:

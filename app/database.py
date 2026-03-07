@@ -68,12 +68,13 @@ CREATE TABLE IF NOT EXISTS call_logs (
 );
 
 CREATE TABLE IF NOT EXISTS analysis_results (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    case_id    TEXT REFERENCES cases(id) ON DELETE CASCADE,
-    artifact   TEXT NOT NULL,
-    llm_result TEXT DEFAULT '{}',
-    provider   TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id      TEXT REFERENCES cases(id) ON DELETE CASCADE,
+    artifact_key TEXT NOT NULL,
+    result       TEXT DEFAULT '',
+    provider     TEXT,
+    created_at   TEXT DEFAULT (datetime('now')),
+    UNIQUE(case_id, artifact_key)
 );
 
 CREATE TABLE IF NOT EXISTS chat_history (
