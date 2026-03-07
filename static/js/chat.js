@@ -181,9 +181,11 @@ export async function loadAnalysisResults(caseId) {
       card.className = "analysis-card";
 
       const header = document.createElement("div");
-      header.className = "analysis-card-header";
-      header.style.cursor = "pointer";
-      header.addEventListener("click", () => body.classList.toggle("collapsed"));
+      header.className = "analysis-card-header open";
+      header.addEventListener("click", () => {
+        body.classList.toggle("collapsed");
+        header.classList.toggle("open");
+      });
 
       const title = document.createElement("h3");
       title.textContent = r.artifact_key;
@@ -193,8 +195,13 @@ export async function loadAnalysisResults(caseId) {
       meta.style.cssText = "font-size:0.75rem;color:var(--text-muted);display:flex;align-items:center;gap:6px";
       meta.innerHTML = `${conf ? `<span class="confidence-inline ${_confidenceClass(conf)}">${conf}</span>` : ""}${r.provider || ""} · ${r.created_at ? r.created_at.slice(0, 16) : ""}`;
 
+      const chevron = document.createElement("span");
+      chevron.className = "analysis-card-chevron";
+      chevron.textContent = "▾";
+
       header.appendChild(title);
       header.appendChild(meta);
+      header.appendChild(chevron);
 
       const body = document.createElement("div");
       body.className = "analysis-card-body markdown-output";

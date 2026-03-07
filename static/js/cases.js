@@ -72,7 +72,7 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
       loadAnalysisResults(activeCaseId);
     }
     // Load conversations when switching to conversations tab
-    if (btn.dataset.tab === "tab-conversations" && activeCaseId) {
+    if (btn.dataset.tab === "tab-conversations") {
       initConversations(activeCaseId);
     }
   });
@@ -110,6 +110,10 @@ async function openCase(id) {
     if (btnReport) btnReport.href = `/api/cases/${id}/report`;
     // Chat
     initChat(id);
+    // Refresh conversations if that tab is already active
+    if (document.querySelector('.tab-btn[data-tab="tab-conversations"]')?.classList.contains("active")) {
+      initConversations(id);
+    }
   } catch (err) {
     document.getElementById("dash-title").textContent = "Error loading case";
   }
