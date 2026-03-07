@@ -23,3 +23,44 @@ def test_parsed_case_message_normalization():
     })
     assert len(pc.messages) == 1
     assert pc.messages[0]["platform"] == "sms"
+
+
+# --- Task 9: UFDR parser ---
+import zipfile
+from pathlib import Path
+from app.parsers.ufdr_parser import UfdrParser
+
+
+def test_ufdr_can_handle(tmp_path):
+    f = tmp_path / "test.ufdr"
+    f.write_bytes(b"PK")  # ZIP magic
+    assert UfdrParser().can_handle(f)
+
+
+def test_ufdr_cannot_handle_non_ufdr(tmp_path):
+    f = tmp_path / "test.zip"
+    f.write_bytes(b"PK")
+    assert not UfdrParser().can_handle(f)
+
+
+def make_mock_ufdr(path: Path) -> Path:
+    """Create a minimal valid UFDR ZIP for testing."""
+    ufdr = path / "test.ufdr"
+    with zipfile.ZipFile(ufdr, "w") as zf:
+        metadata = """<?xml version="1.0"?>
+        <project>
+          <model>Samsung Galaxy S21</model>
+          <imei>123456789012345</imei>
+          <platform>Android 12</platform>
+        </project>"""
+        zf.writestr("Metadata.xml", metadata)
+    return ufdr
+
+
+def test_ufdr_parses_device_info(tmp_path):
+    ufdr = make_mock_ufdr(tmp_path)
+    dest = tmp_path / "out"
+    dest.mkdir()
+    result = UfdrParser().parse(ufdr, dest)
+    assert result.format == "ufdr"
+    assert "Samsung" in result.device_info.get("model", "")
