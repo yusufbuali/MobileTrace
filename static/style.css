@@ -78,7 +78,12 @@ button[type="button"] { background: var(--surface2); color: var(--text); border:
 .device-info-block dd { margin-left: 130px; margin-bottom: 6px; }
 
 /* Evidence upload */
-.upload-form { display: flex; flex-direction: column; gap: 10px; max-width: 480px; margin-bottom: 20px; }
+.evidence-upload-area { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 20px; max-width: 560px; }
+.ev-mode-tabs { display: flex; gap: 4px; margin-bottom: 14px; }
+.ev-mode-btn { padding: 5px 14px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 0.8rem; cursor: pointer; }
+.ev-mode-btn.active { background: var(--info); color: #fff; border-color: var(--info); }
+.upload-form { display: flex; flex-direction: column; gap: 10px; }
+.ev-status { font-size: 0.8rem; color: var(--info); margin-top: 2px; }
 .evidence-list { display: flex; flex-direction: column; gap: 8px; }
 .evidence-item { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }
 .evidence-item .ev-format { color: var(--info); font-weight: 600; font-size: 0.75rem; }

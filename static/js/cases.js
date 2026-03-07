@@ -11,6 +11,7 @@ const formNewCase = document.getElementById("form-new-case");
 const btnAnalyze = document.getElementById("btn-analyze");
 const btnReport = document.getElementById("btn-report");
 const formUpload = document.getElementById("form-upload-evidence");
+const formPath = document.getElementById("form-path-evidence");
 
 let allCases = [];
 let activeCaseId = null;
@@ -180,18 +181,61 @@ if (btnAnalyze) {
 
 // ── Evidence upload ───────────────────────────────────────────────────────────
 
+// Mode toggle: Browser Upload ↔ Local Path
+document.querySelectorAll(".ev-mode-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".ev-mode-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const mode = btn.dataset.mode;
+    document.querySelectorAll(".ev-panel").forEach(p => {
+      p.style.display = p.dataset.panel === mode ? "" : "none";
+    });
+  });
+});
+
 if (formUpload) {
   formUpload.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!activeCaseId) return;
+    const statusEl = document.getElementById("ev-upload-status");
+    if (statusEl) statusEl.textContent = "Uploading…";
     const fd = new FormData(formUpload);
     try {
-      await fetch(`/api/cases/${activeCaseId}/evidence`, { method: "POST", body: fd });
+      const res = await fetch(`/api/cases/${activeCaseId}/evidence`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
       formUpload.reset();
+      if (statusEl) statusEl.textContent = `Parsed — ${data.stats?.messages ?? 0} msgs, ${data.stats?.contacts ?? 0} contacts`;
       _loadEvidence(activeCaseId);
-      openCase(activeCaseId); // refresh stats
+      openCase(activeCaseId);
     } catch (err) {
-      alert("Upload failed: " + err.message);
+      if (statusEl) statusEl.textContent = `Error: ${err.message}`;
+    }
+  });
+}
+
+if (formPath) {
+  formPath.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!activeCaseId) return;
+    const statusEl = document.getElementById("ev-path-status");
+    const path = new FormData(formPath).get("source_path")?.trim();
+    if (!path) return;
+    if (statusEl) statusEl.textContent = "Parsing…";
+    try {
+      const res = await fetch(`/api/cases/${activeCaseId}/evidence`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source_path: path }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      formPath.reset();
+      if (statusEl) statusEl.textContent = `Parsed — ${data.stats?.messages ?? 0} msgs, ${data.stats?.contacts ?? 0} contacts`;
+      _loadEvidence(activeCaseId);
+      openCase(activeCaseId);
+    } catch (err) {
+      if (statusEl) statusEl.textContent = `Error: ${err.message}`;
     }
   });
 }

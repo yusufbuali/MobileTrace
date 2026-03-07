@@ -83,13 +83,11 @@
       <!-- New case form -->
       <div id="view-new-case" class="view">
         <h2>New Case</h2>
+        <p class="muted" style="margin-bottom:16px">Create the case first, then upload evidence from the Evidence tab.</p>
         <form id="form-new-case">
           <label>Case Number <input name="case_number" type="text" /></label>
           <label>Officer Name <input name="officer" type="text" /></label>
           <label>Title * <input name="title" type="text" required /></label>
-          <label>Evidence File
-            <input name="evidence" type="file" accept=".ufdr,.xrep,.zip,.ofb" />
-          </label>
           <button type="submit" class="btn-primary">Create Case</button>
           <button type="button" id="btn-cancel-case">Cancel</button>
         </form>
@@ -125,12 +123,36 @@
 
         <!-- Evidence tab -->
         <div id="tab-evidence" class="tab-panel">
-          <form id="form-upload-evidence" enctype="multipart/form-data" class="upload-form">
-            <label>Upload Evidence File
-              <input name="file" type="file" accept=".ufdr,.xrep,.zip,.ofb" required />
-            </label>
-            <button type="submit" class="btn-primary">Upload &amp; Parse</button>
-          </form>
+          <div class="evidence-upload-area">
+            <!-- Mode toggle -->
+            <div class="ev-mode-tabs">
+              <button class="ev-mode-btn active" data-mode="upload">Browser Upload</button>
+              <button class="ev-mode-btn" data-mode="path">Local Path</button>
+            </div>
+
+            <!-- Browser upload -->
+            <form id="form-upload-evidence" enctype="multipart/form-data" class="upload-form ev-panel" data-panel="upload">
+              <label>Select evidence file (.ufdr, .zip, .ofb, .xrep)
+                <input name="file" type="file" accept=".ufdr,.xrep,.zip,.ofb" required />
+              </label>
+              <button type="submit" class="btn-primary">Upload &amp; Parse</button>
+              <span id="ev-upload-status" class="ev-status"></span>
+            </form>
+
+            <!-- Local path (Docker volume) -->
+            <form id="form-path-evidence" class="upload-form ev-panel" data-panel="path" style="display:none">
+              <label>Server-side path
+                <input name="source_path" type="text" placeholder="/opt/mobiletrace/evidence/dump.ufdr" required />
+              </label>
+              <p class="muted" style="margin-top:4px;font-size:0.78rem">
+                Place the file in the <code>evidence/</code> folder next to docker-compose.yml, then reference it as
+                <code>/opt/mobiletrace/evidence/&lt;filename&gt;</code>.
+                Use this for large files that are impractical to upload through the browser.
+              </p>
+              <button type="submit" class="btn-primary">Parse from Path</button>
+              <span id="ev-path-status" class="ev-status"></span>
+            </form>
+          </div>
           <div id="evidence-list" class="evidence-list"></div>
         </div>
 
