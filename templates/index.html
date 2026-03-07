@@ -30,29 +30,88 @@
 
     <!-- Main content -->
     <main id="main">
+      <!-- Welcome -->
       <div id="view-welcome" class="view active">
         <h1>Welcome to MobileTrace</h1>
         <p>Select a case from the sidebar or create a new one to begin.</p>
       </div>
+
+      <!-- New case form -->
       <div id="view-new-case" class="view">
         <h2>New Case</h2>
         <form id="form-new-case">
           <label>Case Number <input name="case_number" type="text" /></label>
           <label>Officer Name <input name="officer" type="text" /></label>
           <label>Title * <input name="title" type="text" required /></label>
-          <label>Description <textarea name="description"></textarea></label>
           <label>Evidence File
-            <input name="evidence" type="file"
-              accept=".ufdr,.xrep,.zip,.ofb" />
+            <input name="evidence" type="file" accept=".ufdr,.xrep,.zip,.ofb" />
           </label>
           <button type="submit" class="btn-primary">Create Case</button>
           <button type="button" id="btn-cancel-case">Cancel</button>
         </form>
       </div>
+
+      <!-- Case dashboard -->
       <div id="view-case-dashboard" class="view">
-        <!-- Populated dynamically by dashboard.js (Phase 4) -->
-        <div id="dashboard-placeholder">
-          <p>Case dashboard will appear here after evidence is parsed.</p>
+        <div class="dashboard-header">
+          <div>
+            <h2 id="dash-title">—</h2>
+            <div id="dash-meta" class="dash-meta"></div>
+          </div>
+          <div class="dash-actions">
+            <button id="btn-analyze" class="btn-primary">Run Analysis</button>
+            <a id="btn-report" href="#" target="_blank" class="btn-secondary">Report</a>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="tab-overview">Overview</button>
+          <button class="tab-btn" data-tab="tab-evidence">Evidence</button>
+          <button class="tab-btn" data-tab="tab-analysis">Analysis</button>
+          <button class="tab-btn" data-tab="tab-chat">Chat</button>
+        </div>
+
+        <!-- Overview tab -->
+        <div id="tab-overview" class="tab-panel active">
+          <div class="stats-grid" id="dash-stats"></div>
+          <div id="dash-device-info" class="device-info-block"></div>
+        </div>
+
+        <!-- Evidence tab -->
+        <div id="tab-evidence" class="tab-panel">
+          <form id="form-upload-evidence" enctype="multipart/form-data" class="upload-form">
+            <label>Upload Evidence File
+              <input name="file" type="file" accept=".ufdr,.xrep,.zip,.ofb" required />
+            </label>
+            <button type="submit" class="btn-primary">Upload &amp; Parse</button>
+          </form>
+          <div id="evidence-list" class="evidence-list"></div>
+        </div>
+
+        <!-- Analysis tab -->
+        <div id="tab-analysis" class="tab-panel">
+          <div id="analysis-progress" class="analysis-progress"></div>
+          <div id="analysis-results" class="analysis-results"></div>
+        </div>
+
+        <!-- Chat tab -->
+        <div id="tab-chat" class="tab-panel">
+          <div class="chat-layout">
+            <div class="chat-main">
+              <div id="chat-messages" class="chat-messages"></div>
+              <form id="chat-form" class="chat-input-row">
+                <input id="chat-input" type="text" placeholder="Ask about this case&hellip;" autocomplete="off" />
+                <button type="submit" class="btn-primary">Send</button>
+              </form>
+            </div>
+            <div class="chat-sidebar">
+              <div class="chat-sidebar-title">Evidence Citations</div>
+              <div id="chat-citations" class="chat-citations">
+                <p class="muted">Citations from the last response appear here.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </main>
@@ -60,5 +119,6 @@
 
   <script type="module" src="/static/js/api.js"></script>
   <script type="module" src="/static/js/cases.js"></script>
+  <script type="module" src="/static/js/chat.js"></script>
 </body>
 </html>
