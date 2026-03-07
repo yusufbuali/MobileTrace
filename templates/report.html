@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en" dir="{{ 'rtl' if is_rtl else 'ltr' }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MobileTrace Report — {{ case.title }}</title>
+  {% if rtl_css %}<style>{{ rtl_css }}</style>{% endif %}
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #ffffff; --text: #1f2328; --text-muted: #656d76;
+      --border: #d0d7de; --surface: #f6f8fa; --accent: #0969da;
+      --danger: #d1242f; --warning: #9a6700; --success: #1a7f37;
+      --font: 'Segoe UI', system-ui, sans-serif; --radius: 6px;
+    }
+    body { background: var(--bg); color: var(--text); font-family: var(--font);
+           font-size: 13px; line-height: 1.6; padding: 32px; max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 1.6rem; margin-bottom: 4px; }
+    h2 { font-size: 1.15rem; margin: 24px 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    h3 { font-size: 1rem; margin: 16px 0 8px; color: var(--accent); }
+    .report-header { border-bottom: 2px solid var(--border); padding-bottom: 20px; margin-bottom: 24px; }
+    .report-header .subtitle { color: var(--text-muted); font-size: 0.85rem; margin-top: 4px; }
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin: 16px 0; }
+    .meta-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; }
+    .meta-card .label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .meta-card .value { font-size: 1.3rem; font-weight: 700; color: var(--accent); }
+    .device-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 16px; }
+    .device-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+    .device-table td:first-child { color: var(--text-muted); width: 160px; font-weight: 500; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-bottom: 20px; }
+    thead th { background: var(--surface); padding: 8px 10px; border-bottom: 2px solid var(--border);
+               text-align: left; font-weight: 600; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; }
+    tbody td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tbody tr:hover { background: var(--surface); }
+    .badge { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 0.7rem; font-weight: 600; }
+    .badge-in { background: #dafbe1; color: var(--success); }
+    .badge-out { background: #ddf4ff; color: #0550ae; }
+    .badge-missed { background: #fff1e5; color: var(--warning); }
+    .badge-sms { background: #f0f7ff; color: var(--accent); }
+    .badge-whatsapp { background: #dafbe1; color: var(--success); }
+    .badge-telegram { background: #ddf4ff; color: #0550ae; }
+    .badge-signal { background: #f0f7ff; color: #6e40c9; }
+    .analysis-block { background: var(--surface); border: 1px solid var(--border);
+                      border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+    .analysis-block h3 { margin-top: 0; }
+    .analysis-text { white-space: pre-wrap; font-size: 0.82rem; line-height: 1.7; }
+    .graph-container { border: 1px solid var(--border); border-radius: var(--radius);
+                       background: var(--surface); height: 420px; margin-bottom: 24px; position: relative; }
+    .evidence-hash, .ip-address, code, pre { direction: ltr; unicode-bidi: embed; text-align: left; }
+    @media print {
+      body { padding: 16px; font-size: 11px; }
+      .graph-container { page-break-inside: avoid; }
+      h2 { page-break-after: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Report Header -->
+  <div class="report-header">
+    <h1>&#128241; MobileTrace Forensic Report</h1>
+    <div class="subtitle">Generated: {{ generated_at }} &nbsp;|&nbsp; Case: {{ case.case_number or '—' }}</div>
+  </div>
+
+  <!-- Case Info -->
+  <h2>Case Information</h2>
+  <div class="meta-grid">
+    <div class="meta-card"><div class="label">Messages</div><div class="value">{{ stats.messages }}</div></div>
+    <div class="meta-card"><div class="label">Contacts</div><div class="value">{{ stats.contacts }}</div></div>
+    <div class="meta-card"><div class="label">Calls</div><div class="value">{{ stats.calls }}</div></div>
+    <div class="meta-card"><div class="label">Analyses</div><div class="value">{{ stats.analyses }}</div></div>
+  </div>
+  <table class="device-table">
+    <tbody>
+      <tr><td>Title</td><td>{{ case.title }}</td></tr>
+      <tr><td>Officer</td><td>{{ case.officer or '—' }}</td></tr>
+      <tr><td>Status</td><td>{{ case.status }}</td></tr>
+      <tr><td>Created</td><td>{{ case.created_at or '—' }}</td></tr>
+      {% for k, v in case.device_info.items() %}
+      <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- AI Analysis Results -->
+  {% if analysis %}
+  <h2>AI Analysis Results</h2>
+  {% for a in analysis %}
+  <div class="analysis-block">
+    <h3>{{ a.artifact_key | title }} &nbsp;<small style="font-weight:400;color:var(--text-muted)">[{{ a.provider or '?' }}]</small></h3>
+    <div class="analysis-text">{{ a.result }}</div>
+  </div>
+  {% endfor %}
+  {% endif %}
+
+  <!-- Linkage Graph -->
+  <h2>Contact Linkage Graph</h2>
+  <div class="graph-container" id="graph"></div>
+
+  <!-- Messages -->
+  {% if messages %}
+  <h2>Messages ({{ messages | length }})</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Timestamp</th><th>Platform</th><th>Direction</th>
+        <th>From</th><th>To</th><th>Body</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for m in messages %}
+      <tr>
+        <td style="white-space:nowrap">{{ m.timestamp or '—' }}</td>
+        <td><span class="badge badge-{{ m.platform }}">{{ m.platform }}</span></td>
+        <td><span class="badge badge-{{ 'in' if m.direction == 'incoming' else 'out' }}">{{ m.direction }}</span></td>
+        <td>{{ m.sender or '—' }}</td>
+        <td>{{ m.recipient or '—' }}</td>
+        <td>{{ m.body or '' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <!-- Contacts -->
+  {% if contacts %}
+  <h2>Contacts ({{ contacts | length }})</h2>
+  <table>
+    <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Source</th></tr></thead>
+    <tbody>
+    {% for c in contacts %}
+      <tr>
+        <td>{{ c.name or '—' }}</td>
+        <td class="evidence-hash">{{ c.phone or '—' }}</td>
+        <td>{{ c.email or '—' }}</td>
+        <td>{{ c.source_app or '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <!-- Call Logs -->
+  {% if calls %}
+  <h2>Call Logs ({{ calls | length }})</h2>
+  <table>
+    <thead><tr><th>Timestamp</th><th>Number</th><th>Direction</th><th>Duration (s)</th><th>Platform</th></tr></thead>
+    <tbody>
+    {% for c in calls %}
+      <tr>
+        <td style="white-space:nowrap">{{ c.timestamp or '—' }}</td>
+        <td class="evidence-hash">{{ c.number or '—' }}</td>
+        <td><span class="badge badge-{{ c.direction }}">{{ c.direction }}</span></td>
+        <td>{{ c.duration_s }}</td>
+        <td>{{ c.platform }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <!-- D3 Linkage Graph -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script>
+    (function() {
+      const caseId = {{ case.id | tojson }};
+      fetch(`/api/cases/${caseId}/graph`)
+        .then(r => r.json())
+        .then(data => renderGraph(data))
+        .catch(() => {
+          document.getElementById("graph").innerHTML =
+            '<p style="padding:20px;color:#656d76">Graph data unavailable.</p>';
+        });
+
+      function renderGraph({ nodes, edges }) {
+        if (!nodes || !nodes.length) {
+          document.getElementById("graph").innerHTML =
+            '<p style="padding:20px;color:#656d76">No contact linkage data.</p>';
+          return;
+        }
+        const container = document.getElementById("graph");
+        const W = container.clientWidth || 800, H = 420;
+        const svg = d3.select("#graph").append("svg")
+          .attr("width", W).attr("height", H);
+
+        const color = d3.scaleOrdinal()
+          .domain(["device", "contact", "number"])
+          .range(["#0969da", "#1a7f37", "#9a6700"]);
+
+        const sim = d3.forceSimulation(nodes)
+          .force("link", d3.forceLink(edges).id(d => d.id).distance(80))
+          .force("charge", d3.forceManyBody().strength(-200))
+          .force("center", d3.forceCenter(W / 2, H / 2));
+
+        const link = svg.append("g").selectAll("line")
+          .data(edges).join("line")
+          .attr("stroke", "#d0d7de")
+          .attr("stroke-width", d => Math.max(1, Math.log(d.weight + 1)));
+
+        const node = svg.append("g").selectAll("circle")
+          .data(nodes).join("circle")
+          .attr("r", d => d.type === "device" ? 14 : 9)
+          .attr("fill", d => color(d.type))
+          .attr("stroke", "#fff").attr("stroke-width", 2)
+          .call(d3.drag()
+            .on("start", (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+            .on("drag", (e, d) => { d.fx = e.x; d.fy = e.y; })
+            .on("end", (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+
+        const label = svg.append("g").selectAll("text")
+          .data(nodes).join("text")
+          .text(d => d.label.length > 16 ? d.label.slice(0, 14) + "…" : d.label)
+          .attr("font-size", 10).attr("fill", "#1f2328")
+          .attr("dx", 12).attr("dy", 4);
+
+        sim.on("tick", () => {
+          link.attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+              .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+          node.attr("cx", d => d.x).attr("cy", d => d.y);
+          label.attr("x", d => d.x).attr("y", d => d.y);
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
