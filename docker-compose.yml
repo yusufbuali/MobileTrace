@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  mobiletrace:
+    build: .
+    container_name: mobiletrace
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./data:/opt/mobiletrace/data
+      - ./evidence:/opt/mobiletrace/evidence:ro
+      # Shared AIFT mobile modules (read-only)
+      - ../AIFT-DEPLOYMENT-2/app/mobile_ingest.py:/aift_mobile/mobile_ingest.py:ro
+      - ../AIFT-DEPLOYMENT-2/app/mobile_forensics.py:/aift_mobile/mobile_forensics.py:ro
+      - ../AIFT-DEPLOYMENT-2/app/leapp_integration.py:/aift_mobile/leapp_integration.py:ro
+    environment:
+      - MOBILETRACE_DB_PATH=/opt/mobiletrace/data/mobiletrace.db
+      - MOBILETRACE_CASES_DIR=/opt/mobiletrace/data/cases
+      - FLASK_ENV=development
+    restart: unless-stopped
