@@ -99,3 +99,75 @@ def test_xry_parses_device_info_from_xrep(tmp_path):
     result = XryParser().parse(tmp_path, dest)
     assert result.format == "xry"
     assert "iPhone" in result.device_info.get("model", "")
+
+
+# --- Task 11: Oxygen parser ---
+import sqlite3
+from app.parsers.oxygen_parser import OxygenParser
+
+
+def make_oxygen_db(path: Path) -> Path:
+    """Create a minimal Oxygen Forensics SQLite DB for testing."""
+    ofb = path / "device.ofb"
+    conn = sqlite3.connect(ofb)
+    conn.executescript("""
+        CREATE TABLE DeviceInfo (field TEXT, value TEXT);
+        INSERT INTO DeviceInfo VALUES ('DeviceName', 'Samsung Galaxy S22');
+        INSERT INTO DeviceInfo VALUES ('IMEI', '111222333444555');
+        INSERT INTO DeviceInfo VALUES ('OS', 'Android 13');
+
+        CREATE TABLE messages (
+            id INTEGER PRIMARY KEY, address TEXT, body TEXT,
+            date INTEGER, type INTEGER
+        );
+        INSERT INTO messages VALUES (1, '+9731234567', 'Test SMS', 1700000000000, 1);
+
+        CREATE TABLE calls (
+            id INTEGER PRIMARY KEY, number TEXT, duration INTEGER,
+            date INTEGER, call_type INTEGER
+        );
+        INSERT INTO calls VALUES (1, '+9731234567', 120, 1700000000000, 1);
+
+        CREATE TABLE contacts (
+            id INTEGER PRIMARY KEY, display_name TEXT,
+            phone_number TEXT, email TEXT
+        );
+        INSERT INTO contacts VALUES (1, 'Alice', '+9731234567', 'alice@example.com');
+    """)
+    conn.commit()
+    conn.close()
+    return ofb
+
+
+def test_oxygen_can_handle_ofb(tmp_path):
+    ofb = make_oxygen_db(tmp_path)
+    assert OxygenParser().can_handle(ofb)
+
+
+def test_oxygen_parses_device_info(tmp_path):
+    ofb = make_oxygen_db(tmp_path)
+    result = OxygenParser().parse(ofb, tmp_path / "out")
+    assert "Samsung" in result.device_info.get("model", "")
+    assert result.device_info.get("platform") == "android"
+
+
+def test_oxygen_parses_messages(tmp_path):
+    ofb = make_oxygen_db(tmp_path)
+    result = OxygenParser().parse(ofb, tmp_path / "out")
+    assert len(result.messages) == 1
+    assert result.messages[0]["body"] == "Test SMS"
+    assert result.messages[0]["platform"] == "sms"
+
+
+def test_oxygen_parses_contacts(tmp_path):
+    ofb = make_oxygen_db(tmp_path)
+    result = OxygenParser().parse(ofb, tmp_path / "out")
+    assert len(result.contacts) == 1
+    assert result.contacts[0]["name"] == "Alice"
+
+
+def test_oxygen_parses_calls(tmp_path):
+    ofb = make_oxygen_db(tmp_path)
+    result = OxygenParser().parse(ofb, tmp_path / "out")
+    assert len(result.call_logs) == 1
+    assert result.call_logs[0]["duration_s"] == 120
