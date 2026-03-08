@@ -1,6 +1,7 @@
 import { api, apiFetch } from "./api.js";
 import { initChat, triggerAnalysis, loadAnalysisResults } from "./chat.js";
 import { initConversations } from "./conversations.js";
+import { showToast } from "./toast.js";
 
 const caseList = document.getElementById("case-list");
 const searchInput = document.getElementById("search-cases");
@@ -176,6 +177,45 @@ if (btnAnalyze) {
     document.querySelector('[data-tab="tab-analysis"]')?.classList.add("active");
     document.getElementById("tab-analysis")?.classList.add("active");
     await triggerAnalysis(activeCaseId);
+  });
+}
+
+// ── Evidence drag & drop ─────────────────────────────────────────────────────
+
+const uploadArea = document.querySelector(".evidence-upload-area");
+if (uploadArea) {
+  ["dragenter", "dragover"].forEach(evt => {
+    uploadArea.addEventListener(evt, (e) => {
+      e.preventDefault();
+      uploadArea.classList.add("drag-over");
+    });
+  });
+  ["dragleave", "drop"].forEach(evt => {
+    uploadArea.addEventListener(evt, (e) => {
+      e.preventDefault();
+      uploadArea.classList.remove("drag-over");
+    });
+  });
+  uploadArea.addEventListener("drop", (e) => {
+    const file = e.dataTransfer?.files?.[0];
+    if (!file || !activeCaseId) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    const statusEl = document.getElementById("ev-upload-status");
+    if (statusEl) statusEl.textContent = "Uploading…";
+    fetch(`/api/cases/${activeCaseId}/evidence`, { method: "POST", body: fd })
+      .then(r => r.json().then(data => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok) throw new Error(data.error || "Upload failed");
+        if (statusEl) statusEl.textContent = "";
+        showToast(`Parsed — ${data.stats?.messages ?? 0} msgs, ${data.stats?.contacts ?? 0} contacts`, "success");
+        _loadEvidence(activeCaseId);
+        openCase(activeCaseId);
+      })
+      .catch(err => {
+        if (statusEl) statusEl.textContent = "";
+        showToast(`Upload error: ${err.message}`, "error");
+      });
   });
 }
 

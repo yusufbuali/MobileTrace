@@ -86,6 +86,11 @@ button[type="button"] { background: var(--surface2); color: var(--text); border:
 .ev-advanced { margin-top: 10px; }
 .ev-advanced summary { font-size: 0.8rem; color: var(--text-muted); cursor: pointer; user-select: none; }
 .ev-status { font-size: 0.8rem; color: var(--info); margin-top: 2px; }
+.evidence-upload-area.drag-over { border-color: var(--info); border-style: dashed; background: rgba(88,166,255,0.06); }
+.ev-drop-hint { display: none; text-align: center; padding: 20px; color: var(--info); font-size: 0.85rem; font-weight: 600; }
+.evidence-upload-area.drag-over .ev-drop-hint { display: block; }
+.evidence-upload-area.drag-over .upload-form { display: none; }
+.evidence-upload-area.drag-over .ev-mode-tabs { display: none; }
 .evidence-list { display: flex; flex-direction: column; gap: 8px; }
 .evidence-item { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }
 .evidence-item .ev-format { color: var(--info); font-weight: 600; font-size: 0.75rem; }
@@ -431,3 +436,13 @@ button[type="button"] { background: var(--surface2); color: var(--text); border:
 .settings-hint { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
 .btn-sm { padding: 6px 10px; font-size: 0.78rem; margin-top: 6px; }
 #settings-model-select { width: 100%; max-width: 100%; }
+
+/* Toast notifications */
+#toast-container { position: fixed; top: 16px; right: 16px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.toast { pointer-events: auto; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 36px 10px 14px; font-size: 0.85rem; color: var(--text); box-shadow: 0 4px 16px rgba(0,0,0,0.3); opacity: 0; transform: translateX(40px); transition: opacity 0.3s, transform 0.3s; position: relative; max-width: 360px; }
+.toast-visible { opacity: 1; transform: translateX(0); }
+.toast-success { border-left: 3px solid #3fb950; }
+.toast-error { border-left: 3px solid var(--danger); }
+.toast-warning { border-left: 3px solid var(--warning); }
+.toast-info { border-left: 3px solid var(--info); }
+.toast-close { position: absolute; top: 6px; right: 8px; background: none; border: none; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; line-height: 1; padding: 0; }
