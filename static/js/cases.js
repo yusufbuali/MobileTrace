@@ -345,6 +345,20 @@ formNewCase?.addEventListener("submit", async (e) => {
   }
 });
 
+// ── Theme toggle ─────────────────────────────────────────────────────────────
+const btnTheme = document.getElementById("btn-theme");
+function _applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("mt-theme", theme);
+  if (btnTheme) btnTheme.innerHTML = theme === "light" ? "&#9728; Theme" : "&#9790; Theme";
+}
+_applyTheme(localStorage.getItem("mt-theme") || "dark");
+if (btnTheme) {
+  btnTheme.addEventListener("click", () => {
+    _applyTheme(document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light");
+  });
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 loadCases();
 showView("view-welcome");

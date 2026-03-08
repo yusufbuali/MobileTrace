@@ -15,6 +15,19 @@
   --font: 'Segoe UI', system-ui, sans-serif;
   --radius: 6px;
 }
+[data-theme="light"] {
+  --bg: #ffffff;
+  --surface: #f6f8fa;
+  --surface2: #eaeef2;
+  --border: #d0d7de;
+  --accent: #1a7f37;
+  --accent-hover: #218739;
+  --text: #1f2328;
+  --text-muted: #656d76;
+  --danger: #cf222e;
+  --warning: #9a6700;
+  --info: #0969da;
+}
 
 body { background: var(--bg); color: var(--text); font-family: var(--font); height: 100vh; overflow: hidden; }
 
@@ -428,6 +441,8 @@ button[type="button"] { background: var(--surface2); color: var(--text); border:
 /* Gear / settings button in sidebar */
 .btn-gear { background: none; color: var(--text-muted); border: 1px solid var(--border); padding: 8px 12px; border-radius: var(--radius); cursor: pointer; font-size: 0.8rem; width: 100%; text-align: left; transition: color 0.15s; }
 .btn-gear:hover { color: var(--text); border-color: var(--text-muted); }
+.sidebar-bottom-row { display: flex; gap: 6px; }
+.sidebar-bottom-row .btn-gear { flex: 1; }
 
 /* Modal */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 999; }
