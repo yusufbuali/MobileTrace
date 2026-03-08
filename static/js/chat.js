@@ -180,7 +180,7 @@ function _appendThinking() {
   if (!container) return null;
   const div = document.createElement("div");
   div.className = "chat-bubble thinking";
-  div.textContent = "Analysing…";
+  div.innerHTML = '<div class="typing-indicator"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>';
   container.appendChild(div);
   _scrollToBottom();
   return div;
@@ -191,14 +191,24 @@ function _scrollToBottom() {
   if (container) container.scrollTop = container.scrollHeight;
 }
 
-function _renderCitations(contextCount) {
+function _renderCitations(contextCount, citations) {
   const panel = dom("chat-citations");
   if (!panel) return;
   if (!contextCount) {
     panel.innerHTML = '<p class="muted">No matching evidence found for this query.</p>';
     return;
   }
-  panel.innerHTML = `<p class="muted">${contextCount} evidence record${contextCount !== 1 ? "s" : ""} used as context.</p>`;
+  if (citations && Array.isArray(citations) && citations.length) {
+    panel.innerHTML = citations.map((c, i) => `
+      <div class="citation-item">
+        <div class="cit-num">[${i + 1}]</div>
+        <div class="cit-platform">${c.platform || ""} · ${c.thread_id || ""}</div>
+        <div class="cit-body">${(c.body || c.text || "").slice(0, 120)}${(c.body || c.text || "").length > 120 ? "…" : ""}</div>
+      </div>
+    `).join("");
+  } else {
+    panel.innerHTML = `<p class="muted">${contextCount} evidence record${contextCount !== 1 ? "s" : ""} used as context.</p>`;
+  }
 }
 
 // ── Submit ────────────────────────────────────────────────────────────────────
@@ -220,7 +230,7 @@ async function _sendMessage(message) {
     // Replace thinking bubble with real response
     if (thinkingBubble) thinkingBubble.remove();
     _appendBubble("assistant", data.response || "(empty response)");
-    _renderCitations(data.context_count || 0);
+    _renderCitations(data.context_count || 0, data.citations || []);
     _scrollToBottom();
   } catch (err) {
     if (thinkingBubble) thinkingBubble.remove();
@@ -389,6 +399,33 @@ export async function loadAnalysisResults(caseId) {
     if (streamList) streamList.innerHTML = '<p class="muted" style="padding:12px 0">No analysis results yet. Click <strong>Run Analysis</strong> above to start.</p>';
     return;
   }
+
+  // ── Insights Bar ───────────────────────────────────────────────
+  let existingBar = resultsView.querySelector(".analysis-insights-bar");
+  if (existingBar) existingBar.remove();
+  const insightsBar = document.createElement("div");
+  insightsBar.className = "analysis-insights-bar";
+  const totalThreads = rows.reduce((s, r) => s + ((r.result_parsed?.conversation_risk_assessment) || []).length, 0);
+  const topRisk = rows.reduce((best, r) => {
+    const rl = _jsonRiskLevel(r.result_parsed || {});
+    if (!best) return rl;
+    const order = ["CRITICAL","HIGH","MEDIUM","LOW"];
+    return order.indexOf(rl) < order.indexOf(best) ? rl : best;
+  }, null);
+  const platforms = [...new Set(rows.flatMap(r => ((r.result_parsed?.conversation_risk_assessment) || []).map(t => {
+    const tid = t.thread_id || "";
+    if (tid.includes("whatsapp")) return "WhatsApp";
+    if (tid.includes("telegram")) return "Telegram";
+    if (tid.includes("signal")) return "Signal";
+    return "SMS";
+  })))];
+  insightsBar.innerHTML = [
+    { value: rows.length, label: "Artifacts" },
+    { value: totalThreads, label: "Threads" },
+    topRisk ? { value: `<span class="confidence-inline ${_confidenceClass(topRisk)}">${topRisk}</span>`, label: "Risk" } : null,
+    platforms.length ? { value: platforms.join(", "), label: "Platforms" } : null,
+  ].filter(Boolean).map(c => `<div class="insight-chip"><span class="insight-chip-value">${c.value}</span><span class="insight-chip-label">${c.label}</span></div>`).join("");
+  resultsView.insertBefore(insightsBar, resultsView.firstChild);
 
   // ── Executive Summary ──────────────────────────────────────────
   execContent.innerHTML = "";
