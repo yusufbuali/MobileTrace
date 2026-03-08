@@ -361,7 +361,7 @@ function _renderJsonAnalysis(p, container) {
   if (rsum) {
     const banner = document.createElement("div");
     banner.className = "analysis-risk-banner";
-    banner.innerHTML = `<p>${esc(rsum)}</p>`;
+    banner.innerHTML = `<p${_isRtl(rsum) ? ' dir="rtl"' : ""}>${esc(rsum)}</p>`;
     container.appendChild(banner);
   }
 
@@ -394,7 +394,7 @@ function _renderJsonAnalysis(p, container) {
           ↑ <strong>${t.sent||0}</strong> sent &nbsp;·&nbsp;
           ↓ <strong>${t.received||0}</strong> recv
         </div>
-        ${(t.key_indicators||[]).length ? `<ul class="atc-indicators">${(t.key_indicators||[]).map(i=>`<li>${esc(i)}</li>`).join("")}</ul>` : ""}
+        ${(t.key_indicators||[]).length ? `<ul class="atc-indicators">${(t.key_indicators||[]).map(i=>`<li${_isRtl(i) ? ' dir="rtl"' : ""}>${esc(i)}</li>`).join("")}</ul>` : ""}
       `;
       container.appendChild(tc);
     });
@@ -412,10 +412,12 @@ function _renderJsonAnalysis(p, container) {
     (kf.top_significant_conversations || []).forEach(tc => {
       const block = document.createElement("div");
       block.className = "analysis-finding-block";
+      const _sum = tc.summary || "";
       let inner = `<div class="afb-thread">${esc(tc.thread_id||"")}</div>
-                   <div class="afb-summary">${esc(tc.summary||"")}</div>`;
+                   <div class="afb-summary"${_isRtl(_sum) ? ' dir="rtl"' : ""}>${esc(_sum)}</div>`;
       (tc.key_messages||[]).forEach(km => {
-        inner += `<div class="afb-msg"><div class="afb-msg-meta">${esc(km.timestamp||"")} · ${esc(km.direction||"")}</div><div>${esc(km.body||"")}</div></div>`;
+        const _body = km.body || "";
+        inner += `<div class="afb-msg"><div class="afb-msg-meta">${esc(km.timestamp||"")} · ${esc(km.direction||"")}</div><div${_isRtl(_body) ? ' dir="rtl"' : ""}>${esc(_body)}</div></div>`;
       });
       block.innerHTML = inner;
       container.appendChild(block);
@@ -454,13 +456,35 @@ function _renderJsonAnalysis(p, container) {
             : Object.entries(v).map(([k2, v2]) => `**${k2.replace(/_/g," ")}:** ${typeof v2 === "object" ? JSON.stringify(v2) : v2}`).join("\n")
         ));
       } else {
-        val.textContent = String(v ?? "");
+        const _sv = String(v ?? "");
+        if (_isRtl(_sv)) val.dir = "rtl";
+        val.textContent = _sv;
       }
       grid.appendChild(key);
       grid.appendChild(val);
     });
     container.appendChild(grid);
   }
+}
+
+function _isRtl(text) {
+  if (!text) return false;
+  let alpha = 0, rtl = 0;
+  for (const ch of String(text)) {
+    if (/\p{L}/u.test(ch)) {
+      alpha++;
+      const cp = ch.codePointAt(0);
+      if (
+        (cp >= 0x0590 && cp <= 0x05FF) || // Hebrew
+        (cp >= 0x0600 && cp <= 0x06FF) || // Arabic
+        (cp >= 0x0750 && cp <= 0x077F) || // Arabic Supplement
+        (cp >= 0x08A0 && cp <= 0x08FF) || // Arabic Extended-A
+        (cp >= 0xFB50 && cp <= 0xFDFF) || // Arabic Presentation Forms-A
+        (cp >= 0xFE70 && cp <= 0xFEFF)    // Arabic Presentation Forms-B
+      ) rtl++;
+    }
+  }
+  return alpha > 0 && (rtl / alpha) >= 0.3;
 }
 
 function _extractConfidence(text) {
