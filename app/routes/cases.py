@@ -97,6 +97,149 @@ def delete_case(case_id: str):
     return jsonify({"deleted": case_id})
 
 
+def _allowed_evidence_path(resolved: Path, cfg) -> bool:
+    """Check if a resolved path is under an allowed evidence directory."""
+    cases_dir = Path(cfg["server"]["cases_dir"])
+    allowed = [
+        Path("/opt/mobiletrace/evidence").resolve(),
+        Path("/opt/aift/evidence").resolve(),
+        (cases_dir.parent / "evidence").resolve(),
+    ]
+    return any(str(resolved).startswith(str(a)) for a in allowed)
+
+
+@bp_cases.post("/cases/<case_id>/evidence/scan")
+def scan_folder(case_id: str):
+    """Scan a directory for importable forensic files and databases."""
+    db = get_db()
+    row = db.execute("SELECT id FROM cases WHERE id=?", (case_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "case not found"}), 404
+
+    body = request.get_json() or {}
+    folder = body.get("folder_path", "").strip()
+    if not folder:
+        return jsonify({"error": "folder_path is required"}), 400
+
+    folder_path = Path(folder)
+    if not folder_path.is_dir():
+        return jsonify({"error": f"not a directory: {folder}"}), 400
+
+    cfg = current_app.config["MT_CONFIG"]
+    if not _allowed_evidence_path(folder_path.resolve(), cfg):
+        return jsonify({"error": "path not in allowed evidence directories"}), 403
+
+    from app.parsers.folder_parser import FolderParser
+    result = FolderParser.scan_folder(folder_path)
+    return jsonify(result)
+
+
+@bp_cases.post("/cases/<case_id>/evidence/import-folder")
+def import_folder(case_id: str):
+    """Import selected archives and/or platform databases from a scanned folder."""
+    db = get_db()
+    row = db.execute("SELECT id FROM cases WHERE id=?", (case_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "case not found"}), 404
+
+    cfg = current_app.config["MT_CONFIG"]
+    cases_dir = Path(cfg["server"]["cases_dir"])
+    case_dir = cases_dir / case_id
+
+    body = request.get_json() or {}
+    folder_path = body.get("folder_path", "").strip()
+    archives = body.get("archives", [])
+    platforms = body.get("platforms", [])
+    signal_key = body.get("signal_key", "").strip()
+
+    if not folder_path:
+        return jsonify({"error": "folder_path is required"}), 400
+    resolved = Path(folder_path).resolve()
+    if not _allowed_evidence_path(resolved, cfg):
+        return jsonify({"error": "path not in allowed evidence directories"}), 403
+
+    imported = []
+    errors = []
+
+    # ── Import selected archive files via existing pipeline ──
+    for arc_path in archives:
+        arc = Path(arc_path)
+        if not arc.exists():
+            errors.append({"path": arc_path, "error": "file not found"})
+            continue
+        try:
+            fmt = detect_format(arc) or "unknown"
+            ev_id = str(uuid.uuid4())
+            db.execute(
+                "INSERT INTO evidence_files (id, case_id, format, source_path, parse_status) VALUES (?,?,?,?,?)",
+                (ev_id, case_id, fmt, str(arc), "parsing"),
+            )
+            db.commit()
+            extract_dir = case_dir / "extracted"
+            parsed = dispatch(arc, extract_dir, signal_key=signal_key)
+            _store_parsed(db, case_id, parsed)
+            db.execute(
+                "UPDATE evidence_files SET parse_status='done', parsed_at=datetime('now') WHERE id=?",
+                (ev_id,),
+            )
+            if parsed.device_info:
+                db.execute(
+                    "UPDATE cases SET device_info=?, updated_at=datetime('now') WHERE id=?",
+                    (json.dumps(parsed.device_info), case_id),
+                )
+            db.commit()
+            imported.append({
+                "type": "archive", "path": arc_path, "format": fmt,
+                "stats": {"contacts": len(parsed.contacts), "messages": len(parsed.messages), "calls": len(parsed.call_logs)},
+            })
+        except Exception as exc:
+            db.execute(
+                "UPDATE evidence_files SET parse_status='error', parse_error=? WHERE id=?",
+                (str(exc), ev_id),
+            )
+            db.commit()
+            errors.append({"path": arc_path, "error": str(exc)})
+
+    # ── Import platform databases from folder ──
+    from app.parsers.folder_parser import FolderParser
+    fp = FolderParser()
+    for platform in platforms:
+        try:
+            ev_id = str(uuid.uuid4())
+            fmt = f"folder_{platform}"
+            db.execute(
+                "INSERT INTO evidence_files (id, case_id, format, source_path, parse_status) VALUES (?,?,?,?,?)",
+                (ev_id, case_id, fmt, folder_path, "parsing"),
+            )
+            db.commit()
+            parsed = fp.parse(Path(folder_path), case_dir / "extracted", platform=platform, signal_key=signal_key)
+            _store_parsed(db, case_id, parsed)
+            db.execute(
+                "UPDATE evidence_files SET parse_status='done', parsed_at=datetime('now') WHERE id=?",
+                (ev_id,),
+            )
+            if parsed.device_info:
+                db.execute(
+                    "UPDATE cases SET device_info=?, updated_at=datetime('now') WHERE id=?",
+                    (json.dumps(parsed.device_info), case_id),
+                )
+            db.commit()
+            imported.append({
+                "type": "folder", "platform": platform,
+                "stats": {"contacts": len(parsed.contacts), "messages": len(parsed.messages), "calls": len(parsed.call_logs)},
+                "warnings": parsed.warnings,
+            })
+        except Exception as exc:
+            db.execute(
+                "UPDATE evidence_files SET parse_status='error', parse_error=? WHERE id=?",
+                (str(exc), ev_id),
+            )
+            db.commit()
+            errors.append({"platform": platform, "error": str(exc)})
+
+    return jsonify({"imported": imported, "errors": errors}), 201
+
+
 @bp_cases.post("/cases/<case_id>/evidence")
 def upload_evidence(case_id: str):
     db = get_db()
@@ -118,12 +261,7 @@ def upload_evidence(case_id: str):
         if not source_path.exists():
             return jsonify({"error": f"file not found: {src}"}), 400
         # Resolve path must be under an allowed prefix for safety
-        resolved = source_path.resolve()
-        allowed = [
-            Path("/opt/mobiletrace/evidence").resolve(),
-            Path("/opt/aift/evidence").resolve(),
-        ]
-        if not any(str(resolved).startswith(str(a)) for a in allowed):
+        if not _allowed_evidence_path(source_path.resolve(), cfg):
             return jsonify({"error": "path not in allowed evidence directories"}), 403
         signal_key = body.get("signal_key", "").strip()
         return _ingest_path(db, case_id, case_dir, source_path, signal_key=signal_key)

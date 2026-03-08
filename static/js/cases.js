@@ -407,6 +407,217 @@ if (formPath) {
   });
 }
 
+// ── Folder scan ───────────────────────────────────────────────────────────────
+
+const formFolderScan = document.getElementById("form-folder-scan");
+const folderResults = document.getElementById("folder-scan-results");
+const folderResultsList = document.getElementById("fs-results-list");
+let _lastScanPath = "";
+let _lastScanData = null;
+
+function _fmtSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+if (formFolderScan) {
+  formFolderScan.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!activeCaseId) return;
+    const statusEl = document.getElementById("folder-scan-status");
+    const pathInput = document.getElementById("folder-scan-path");
+    const folder = pathInput?.value.trim();
+    if (!folder) return;
+    if (statusEl) statusEl.textContent = "Scanning…";
+    if (folderResults) folderResults.style.display = "none";
+
+    try {
+      const res = await fetch(`/api/cases/${activeCaseId}/evidence/scan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder_path: folder }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Scan failed");
+      if (statusEl) statusEl.textContent = "";
+      _lastScanPath = folder;
+      _lastScanData = data;
+      _renderScanResults(data);
+    } catch (err) {
+      if (statusEl) statusEl.textContent = "";
+      showToast(`Scan error: ${err.message}`, "error");
+    }
+  });
+}
+
+function _renderScanResults(data) {
+  if (!folderResultsList || !folderResults) return;
+  folderResultsList.innerHTML = "";
+
+  const total = (data.archives?.length || 0)
+    + Object.values(data.platforms || {}).reduce((s, p) => s + (p.databases?.length || 0), 0);
+
+  if (total === 0) {
+    folderResultsList.innerHTML = '<p class="muted" style="padding:8px">No importable files found in this folder.</p>';
+    folderResults.style.display = "";
+    return;
+  }
+
+  // ── Archives ──
+  if (data.archives?.length) {
+    const hdr = document.createElement("div");
+    hdr.className = "fs-platform-header";
+    hdr.textContent = `Archive Files (${data.archives.length})`;
+    folderResultsList.appendChild(hdr);
+
+    data.archives.forEach(a => {
+      const item = document.createElement("label");
+      item.className = "fs-item selected";
+      item.dataset.type = "archive";
+      item.dataset.path = a.path;
+      item.innerHTML = `
+        <input type="checkbox" checked data-type="archive" data-path="${a.path}" />
+        <div class="fs-item-info">
+          <span class="fs-item-label">${a.name}</span>
+          <span><span class="fs-item-meta">${a.format.toUpperCase()}</span> <span class="fs-item-size">${_fmtSize(a.size)}</span></span>
+        </div>`;
+      item.querySelector("input").addEventListener("change", _onFsCheckChange);
+      folderResultsList.appendChild(item);
+    });
+  }
+
+  // ── Platform databases ──
+  for (const [platform, info] of Object.entries(data.platforms || {})) {
+    if (!info.databases?.length) continue;
+    const hdr = document.createElement("div");
+    hdr.className = "fs-platform-header";
+    hdr.textContent = `${platform === "android" ? "Android" : "iOS"} Databases (${info.databases.length})`;
+    folderResultsList.appendChild(hdr);
+
+    // Platform-level checkbox
+    const platItem = document.createElement("label");
+    platItem.className = "fs-item selected";
+    platItem.dataset.type = "platform";
+    platItem.dataset.platform = platform;
+    platItem.innerHTML = `
+      <input type="checkbox" checked data-type="platform" data-platform="${platform}" />
+      <div class="fs-item-info">
+        <span class="fs-item-label">Import all ${platform === "android" ? "Android" : "iOS"} databases</span>
+        <span class="fs-item-meta">${info.databases.map(d => d.label).join(", ")}</span>
+      </div>`;
+    platItem.querySelector("input").addEventListener("change", _onFsCheckChange);
+    folderResultsList.appendChild(platItem);
+
+    // Individual DB items (informational, dimmed)
+    info.databases.forEach(db => {
+      const sub = document.createElement("div");
+      sub.className = "fs-item";
+      sub.style.paddingLeft = "36px";
+      sub.style.opacity = "0.7";
+      sub.style.cursor = "default";
+      sub.innerHTML = `
+        <div class="fs-item-info">
+          <span class="fs-item-label">${db.label}</span>
+          <span class="fs-item-size">${_fmtSize(db.size)}</span>
+        </div>`;
+      folderResultsList.appendChild(sub);
+    });
+  }
+
+  folderResults.style.display = "";
+  _updateFsSelectionCount();
+
+  // Toggle all button
+  const toggleBtn = document.getElementById("fs-toggle-all");
+  if (toggleBtn) {
+    toggleBtn.onclick = () => {
+      const cbs = folderResultsList.querySelectorAll("input[type=checkbox]");
+      const allChecked = [...cbs].every(c => c.checked);
+      cbs.forEach(cb => {
+        cb.checked = !allChecked;
+        const label = cb.closest(".fs-item");
+        if (label) label.classList.toggle("selected", cb.checked);
+      });
+      toggleBtn.textContent = allChecked ? "Select All" : "Deselect All";
+      _updateFsSelectionCount();
+    };
+  }
+
+  // Import button
+  const importBtn = document.getElementById("fs-import-btn");
+  if (importBtn) {
+    importBtn.onclick = () => _importSelected();
+  }
+}
+
+function _onFsCheckChange(e) {
+  const label = e.target.closest(".fs-item");
+  if (label) label.classList.toggle("selected", e.target.checked);
+  _updateFsSelectionCount();
+}
+
+function _updateFsSelectionCount() {
+  const cbs = folderResultsList?.querySelectorAll("input[type=checkbox]") || [];
+  const checked = [...cbs].filter(c => c.checked).length;
+  const countEl = document.getElementById("fs-selection-count");
+  const importBtn = document.getElementById("fs-import-btn");
+  if (countEl) countEl.textContent = `${checked} of ${cbs.length} selected`;
+  if (importBtn) importBtn.disabled = checked === 0;
+}
+
+async function _importSelected() {
+  if (!activeCaseId || !_lastScanPath) return;
+  const cbs = folderResultsList?.querySelectorAll("input[type=checkbox]:checked") || [];
+  const archives = [];
+  const platforms = [];
+  cbs.forEach(cb => {
+    if (cb.dataset.type === "archive") archives.push(cb.dataset.path);
+    if (cb.dataset.type === "platform") platforms.push(cb.dataset.platform);
+  });
+  if (!archives.length && !platforms.length) return;
+
+  const importBtn = document.getElementById("fs-import-btn");
+  if (importBtn) { importBtn.disabled = true; importBtn.textContent = "Importing…"; }
+  const signalKey = document.getElementById("folder-signal-key")?.value.trim() || "";
+
+  try {
+    const res = await fetch(`/api/cases/${activeCaseId}/evidence/import-folder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        folder_path: _lastScanPath,
+        archives,
+        platforms,
+        signal_key: signalKey,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Import failed");
+
+    const totalMsgs = data.imported.reduce((s, i) => s + (i.stats?.messages || 0), 0);
+    const totalContacts = data.imported.reduce((s, i) => s + (i.stats?.contacts || 0), 0);
+    showToast(`Imported ${data.imported.length} source(s) — ${totalMsgs} msgs, ${totalContacts} contacts`, "success");
+
+    if (data.errors?.length) {
+      data.errors.forEach(e => showToast(`Error: ${e.error}`, "error"));
+    }
+
+    // Show warnings
+    data.imported.forEach(i => {
+      (i.warnings || []).forEach(w => showToast(w, "warning"));
+    });
+
+    _loadEvidence(activeCaseId);
+    openCase(activeCaseId);
+    if (folderResults) folderResults.style.display = "none";
+  } catch (err) {
+    showToast(`Import error: ${err.message}`, "error");
+  } finally {
+    if (importBtn) { importBtn.disabled = false; importBtn.textContent = "Import Selected"; }
+  }
+}
+
 // ── New case form ─────────────────────────────────────────────────────────────
 
 btnNewCase?.addEventListener("click", () => showView("view-new-case"));

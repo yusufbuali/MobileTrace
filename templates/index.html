@@ -133,6 +133,7 @@
             <div class="ev-mode-tabs">
               <button class="ev-mode-btn active" data-mode="upload">Browser Upload</button>
               <button class="ev-mode-btn" data-mode="path">Local Path</button>
+              <button class="ev-mode-btn" data-mode="folder">Folder Scan</button>
             </div>
 
             <!-- Browser upload -->
@@ -183,6 +184,43 @@
               <button type="submit" class="btn-primary">Parse from Path</button>
               <span id="ev-path-status" class="ev-status"></span>
             </form>
+          </div>
+
+            <!-- Folder scan -->
+            <div id="panel-folder-scan" class="ev-panel" data-panel="folder" style="display:none">
+              <form id="form-folder-scan" class="upload-form">
+                <label>Folder path (server-side)
+                  <input id="folder-scan-path" name="folder_path" type="text"
+                         placeholder="/opt/mobiletrace/evidence/my_extraction" required />
+                </label>
+                <p class="muted" style="margin-top:4px;font-size:0.78rem">
+                  Point to a folder containing a forensic extraction (Cellebrite, XRY, Oxygen,
+                  raw Android/iOS filesystem dump). MobileTrace will auto-discover all importable files.
+                </p>
+                <details class="ev-advanced">
+                  <summary>Advanced options</summary>
+                  <label>Signal decryption key (optional)
+                    <input id="folder-signal-key" name="signal_key" type="password"
+                           placeholder="64-char hex key" autocomplete="off" />
+                  </label>
+                </details>
+                <button type="submit" class="btn-primary">Scan Folder</button>
+                <span id="folder-scan-status" class="ev-status"></span>
+              </form>
+
+              <!-- Scan results (hidden until scan completes) -->
+              <div id="folder-scan-results" style="display:none">
+                <div class="fs-results-header">
+                  <span class="fs-results-title">Discovered Files</span>
+                  <button id="fs-toggle-all" class="ap-toggle-btn">Deselect All</button>
+                </div>
+                <div id="fs-results-list" class="fs-results-list"></div>
+                <div class="fs-results-footer">
+                  <button id="fs-import-btn" class="btn-primary" disabled>Import Selected</button>
+                  <span id="fs-selection-count" class="ap-selection-count"></span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <details class="ev-supported-formats">
