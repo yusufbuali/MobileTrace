@@ -40,7 +40,33 @@ Each call record contains:
 - International calls (flag country code)
 - FaceTime calls (platform=facetime_video/facetime_audio) — indicate Apple device cross-communication
 
-## Output Must Include
-- Contact Risk Assessment table
-- Total call count, date range, top contacts by duration and frequency
-- CRITICAL/HIGH/MEDIUM/LOW confidence label
+## Output Format
+
+Return ONLY valid JSON — no markdown fences, no explanation text outside the JSON.
+
+```json
+{
+  "risk_level_summary": "One-sentence overall risk assessment",
+  "confidence_level": "CRITICAL|HIGH|MEDIUM|LOW",
+  "conversation_risk_assessment": [
+    {
+      "thread_id": "+1234567890",
+      "calls": 12,
+      "messages": 12,
+      "sent": 8,
+      "received": 4,
+      "duration_s": 2820,
+      "risk_score": 7,
+      "risk_level": "HIGH",
+      "key_indicators": ["High frequency near incident date", "Long duration calls"]
+    }
+  ],
+  "key_findings": [
+    {
+      "thread_id": "+1234567890",
+      "summary": "Forensic significance of this contact's call pattern",
+      "key_messages": []
+    }
+  ]
+}
+```

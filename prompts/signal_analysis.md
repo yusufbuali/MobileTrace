@@ -41,7 +41,17 @@ State clearly:
 | +9731234567 | 45 | 6/10 | MEDIUM | Frequent late-night contact, media sharing |
 ```
 
-## Output Must Include
-- Encryption status prominently stated
-- If encrypted: explicit recommendation for legal process
-- CRITICAL/HIGH/MEDIUM/LOW confidence label
+## Output Format
+
+Return ONLY valid JSON — no markdown fences, no explanation text outside the JSON.
+
+```json
+{
+  "risk_level_summary": "Signal installed. Database encrypted — content inaccessible.",
+  "confidence_level": "HIGH",
+  "encryption_status": "SQLCipher-encrypted | Decrypted successfully",
+  "legal_recommendation": "Obtain decryption key via GrayKey/Cellebrite Physical/passcode seizure",
+  "conversation_risk_assessment": [],
+  "key_findings": []
+}
+```

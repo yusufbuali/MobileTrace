@@ -41,7 +41,33 @@ For each unique phone number, assess:
 - Media messages (empty body with MMS context)
 - Group message threads (multiple recipients)
 
-## Output Must Include
-- Contact Risk Assessment table
-- Total message count, date range, unique contacts
-- CRITICAL/HIGH/MEDIUM/LOW confidence label
+## Output Format
+
+Return ONLY valid JSON — no markdown fences, no explanation text outside the JSON.
+
+```json
+{
+  "risk_level_summary": "One-sentence overall risk assessment",
+  "confidence_level": "CRITICAL|HIGH|MEDIUM|LOW",
+  "conversation_risk_assessment": [
+    {
+      "thread_id": "+1234567890",
+      "messages": 10,
+      "sent": 6,
+      "received": 4,
+      "risk_score": 8,
+      "risk_level": "HIGH",
+      "key_indicators": ["Indicator 1", "Indicator 2"]
+    }
+  ],
+  "key_findings": [
+    {
+      "thread_id": "+1234567890",
+      "summary": "Forensic significance of this thread",
+      "key_messages": [
+        { "timestamp": "2021-12-11T16:11:00Z", "direction": "outgoing", "body": "message text" }
+      ]
+    }
+  ]
+}
+```

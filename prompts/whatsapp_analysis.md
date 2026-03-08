@@ -41,7 +41,33 @@ For each unique thread_id, assess risk and produce a Markdown table:
 - International numbers (flag country codes)
 - Unknown numbers (no display name context)
 
-## Output Must Include
-- Conversation Risk Assessment table
-- Total message count, date range, unique contacts
-- CRITICAL/HIGH/MEDIUM/LOW confidence label at the end
+## Output Format
+
+Return ONLY valid JSON — no markdown fences, no explanation text outside the JSON.
+
+```json
+{
+  "risk_level_summary": "One-sentence overall risk assessment",
+  "confidence_level": "CRITICAL|HIGH|MEDIUM|LOW",
+  "conversation_risk_assessment": [
+    {
+      "thread_id": "+1234567890@s.whatsapp.net",
+      "messages": 14,
+      "sent": 7,
+      "received": 7,
+      "risk_score": 5,
+      "risk_level": "MEDIUM",
+      "key_indicators": ["Deleted message detected", "Coordination of calls"]
+    }
+  ],
+  "key_findings": [
+    {
+      "thread_id": "+1234567890@s.whatsapp.net",
+      "summary": "Forensic significance",
+      "key_messages": [
+        { "timestamp": "2021-12-01T01:44:07Z", "direction": "outgoing", "body": "message text" }
+      ]
+    }
+  ]
+}
+```

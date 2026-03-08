@@ -46,8 +46,34 @@ Numeric thread IDs (dialog_id > 1,000,000,000 often indicate channels/supergroup
 - What content the user communicated about
 - Whether device owner was primarily sending or receiving
 
-## Output Must Include
-- Conversation Risk Assessment table
-- Encryption status statement
-- Total message count, unique contacts, date range
-- CRITICAL/HIGH/MEDIUM/LOW confidence label
+## Output Format
+
+Return ONLY valid JSON — no markdown fences, no explanation text outside the JSON.
+
+```json
+{
+  "risk_level_summary": "One-sentence overall risk assessment",
+  "confidence_level": "CRITICAL|HIGH|MEDIUM|LOW",
+  "encryption_status": "Decrypted successfully | SQLCipher-encrypted — content not accessible",
+  "conversation_risk_assessment": [
+    {
+      "thread_id": "dialog_id_or_contact_name",
+      "messages": 18,
+      "sent": 9,
+      "received": 9,
+      "risk_score": 7,
+      "risk_level": "HIGH",
+      "key_indicators": ["Coded language", "File references"]
+    }
+  ],
+  "key_findings": [
+    {
+      "thread_id": "dialog_id_or_contact_name",
+      "summary": "Forensic significance",
+      "key_messages": [
+        { "timestamp": "2021-11-25T19:33:08Z", "direction": "incoming", "body": "message text" }
+      ]
+    }
+  ]
+}
+```
