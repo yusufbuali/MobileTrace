@@ -222,6 +222,23 @@
         <!-- Analysis tab -->
         <div id="tab-analysis" class="tab-panel" role="tabpanel">
 
+          <!-- ── Pre-analysis preview panel ── -->
+          <div id="analysis-preview" class="analysis-preview">
+            <div class="ap-header">
+              <div class="ap-title">Analysis Preparation</div>
+            </div>
+            <div id="ap-evidence" class="ap-evidence"></div>
+            <div class="ap-artifacts-header">
+              <span>Select artifacts to analyze</span>
+              <button id="ap-toggle-all" class="ap-toggle-btn">Deselect All</button>
+            </div>
+            <div id="ap-artifact-list" class="ap-artifact-list"></div>
+            <div class="ap-footer">
+              <button id="ap-start-btn" class="btn-primary" disabled>Start Analysis</button>
+              <span id="ap-selection-count" class="ap-selection-count"></span>
+            </div>
+          </div>
+
           <!-- ── Radar progress header (shown during + after analysis) ── -->
           <div id="analysis-progress-header" class="aph-hidden">
             <div class="aph-radar-wrap" aria-hidden="true">
@@ -242,6 +259,7 @@
               </div>
               <div class="aph-bottom-row">
                 <span id="aph-current" class="aph-current"></span>
+                <button id="aph-cancel-btn" class="aph-cancel-btn aph-hidden">Cancel</button>
               </div>
             </div>
           </div>
