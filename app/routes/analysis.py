@@ -6,7 +6,7 @@ import queue
 import threading
 from typing import Generator
 
-from flask import Blueprint, Response, current_app, jsonify, stream_with_context
+from flask import Blueprint, Response, current_app, jsonify, request, stream_with_context
 
 from app.analyzer import MobileAnalyzer
 from app.database import get_db
@@ -26,12 +26,6 @@ def _get_cancel_event(case_id: str) -> threading.Event:
         if case_id not in _cancel_events:
             _cancel_events[case_id] = threading.Event()
         return _cancel_events[case_id]
-
-
-def _clear_cancel_event(case_id: str) -> None:
-    with _cancel_lock:
-        if case_id in _cancel_events:
-            _cancel_events[case_id].clear()
 
 
 def _get_or_create_queue(case_id: str) -> "queue.Queue[str | None]":
@@ -67,8 +61,7 @@ def trigger_analysis(case_id: str):
         return jsonify({"error": "case not found"}), 404
 
     # Parse optional artifact filter from request body
-    from flask import request as flask_request
-    body = flask_request.get_json(silent=True) or {}
+    body = request.get_json(silent=True) or {}
     artifact_filter = body.get("artifacts")  # list of keys or None (= all)
 
     config = current_app.config["MT_CONFIG"]
@@ -122,14 +115,14 @@ def analysis_preview(case_id: str):
         ).fetchall()
     ]
 
-    # Per-platform message counts
-    msg_counts = {}
-    for platform in ("sms", "whatsapp", "telegram", "signal"):
-        cnt = db.execute(
-            "SELECT COUNT(*) as c FROM messages WHERE case_id=? AND platform=?",
-            (case_id, platform),
-        ).fetchone()["c"]
-        msg_counts[platform] = cnt
+    # Per-platform message counts (single query)
+    msg_counts = {p: 0 for p in ("sms", "whatsapp", "telegram", "signal")}
+    for row in db.execute(
+        "SELECT platform, COUNT(*) as c FROM messages WHERE case_id=? GROUP BY platform",
+        (case_id,),
+    ).fetchall():
+        if row["platform"] in msg_counts:
+            msg_counts[row["platform"]] = row["c"]
 
     # Call log count
     call_count = db.execute(

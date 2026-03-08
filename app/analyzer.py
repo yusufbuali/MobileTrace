@@ -87,7 +87,7 @@ class MobileAnalyzer:
         db,
         callback: Callable[[str, dict], None] | None = None,
         artifact_filter: list[str] | None = None,
-        cancel_event: "threading.Event | None" = None,
+        cancel_event: threading.Event | None = None,
     ) -> list[dict[str, Any]]:
         """Run structured analysis for selected artifact types in a case.
 

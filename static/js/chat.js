@@ -95,10 +95,10 @@ export async function loadAnalysisPreview(caseId) {
     });
   }
 
-  // Toggle all button
+  // Toggle all button (onclick to avoid listener accumulation on re-calls)
   const toggleBtn = dom("ap-toggle-all");
   if (toggleBtn) {
-    toggleBtn.addEventListener("click", () => {
+    toggleBtn.onclick = () => {
       const cbs = listEl.querySelectorAll("input[type=checkbox]");
       const allChecked = [...cbs].filter(c => c.checked).length === cbs.length;
       cbs.forEach(cb => {
@@ -109,7 +109,7 @@ export async function loadAnalysisPreview(caseId) {
       });
       toggleBtn.textContent = allChecked ? "Select All" : "Deselect All";
       _updateSelectionCount(data.artifacts.length);
-    });
+    };
   }
 
   // Start button
@@ -293,6 +293,9 @@ async function _triggerWithArtifacts(caseId, artifacts) {
     if (cancelBtn) cancelBtn.classList.add("aph-hidden");
     return;
   }
+
+  // Close any stale EventSource from a previous analysis
+  if (_currentEs) { _currentEs.close(); _currentEs = null; }
 
   const es = new EventSource(`/api/cases/${caseId}/analysis/stream`);
   _currentEs = es;
