@@ -6,6 +6,7 @@ configured AI provider in parallel. Stores results back to analysis_results.
 from __future__ import annotations
 
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable
@@ -85,13 +86,22 @@ class MobileAnalyzer:
         case_id: str,
         db,
         callback: Callable[[str, dict], None] | None = None,
+        artifact_filter: list[str] | None = None,
+        cancel_event: "threading.Event | None" = None,
     ) -> list[dict[str, Any]]:
-        """Run structured analysis for all artifact types in a case.
+        """Run structured analysis for selected artifact types in a case.
 
-        Returns a list of result dicts, each with keys:
-        ``artifact_key``, ``result`` (LLM text), ``provider``, and optionally ``error``.
+        If artifact_filter is provided, only those artifact keys are analyzed.
+        If cancel_event is set, remaining artifacts are skipped.
         """
-        artifacts = self._collect_artifacts(case_id, db)
+        all_artifacts = self._collect_artifacts(case_id, db)
+
+        # Apply filter
+        if artifact_filter is not None:
+            artifacts = {k: v for k, v in all_artifacts.items() if k in artifact_filter}
+        else:
+            artifacts = all_artifacts
+
         results: list[dict[str, Any]] = []
 
         with ThreadPoolExecutor(max_workers=3) as pool:
@@ -100,6 +110,11 @@ class MobileAnalyzer:
                 for key, data in artifacts.items()
             }
             for future in as_completed(futures):
+                # Check cancel before processing result
+                if cancel_event and cancel_event.is_set():
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    break
+
                 artifact_key = futures[future]
                 try:
                     result = future.result()

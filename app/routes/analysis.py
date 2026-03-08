@@ -17,6 +17,22 @@ bp_analysis = Blueprint("analysis", __name__, url_prefix="/api")
 _progress_queues: dict[str, "queue.Queue[str | None]"] = {}
 _queues_lock = threading.Lock()
 
+_cancel_events: dict[str, threading.Event] = {}
+_cancel_lock = threading.Lock()
+
+
+def _get_cancel_event(case_id: str) -> threading.Event:
+    with _cancel_lock:
+        if case_id not in _cancel_events:
+            _cancel_events[case_id] = threading.Event()
+        return _cancel_events[case_id]
+
+
+def _clear_cancel_event(case_id: str) -> None:
+    with _cancel_lock:
+        if case_id in _cancel_events:
+            _cancel_events[case_id].clear()
+
 
 def _get_or_create_queue(case_id: str) -> "queue.Queue[str | None]":
     with _queues_lock:
@@ -44,13 +60,20 @@ def _close_stream(case_id: str) -> None:
 
 @bp_analysis.post("/cases/<case_id>/analyze")
 def trigger_analysis(case_id: str):
-    """Start background LLM analysis for all artifacts in a case."""
+    """Start background LLM analysis for selected artifacts in a case."""
     db = get_db()
     row = db.execute("SELECT id FROM cases WHERE id=?", (case_id,)).fetchone()
     if not row:
         return jsonify({"error": "case not found"}), 404
 
+    # Parse optional artifact filter from request body
+    from flask import request as flask_request
+    body = flask_request.get_json(silent=True) or {}
+    artifact_filter = body.get("artifacts")  # list of keys or None (= all)
+
     config = current_app.config["MT_CONFIG"]
+    cancel_evt = _get_cancel_event(case_id)
+    cancel_evt.clear()  # reset from any previous cancel
 
     def _run():
         def _callback(artifact_key: str, result: dict) -> None:
@@ -62,8 +85,16 @@ def trigger_analysis(case_id: str):
 
         try:
             analyzer = MobileAnalyzer(config)
-            analyzer.analyze_case(case_id, get_db(), callback=_callback)
-            _push_event(case_id, "complete", {"case_id": case_id})
+            analyzer.analyze_case(
+                case_id, get_db(),
+                callback=_callback,
+                artifact_filter=artifact_filter,
+                cancel_event=cancel_evt,
+            )
+            if cancel_evt.is_set():
+                _push_event(case_id, "cancelled", {"case_id": case_id})
+            else:
+                _push_event(case_id, "complete", {"case_id": case_id})
         except Exception as exc:
             _push_event(case_id, "error", {"message": str(exc)})
         finally:
@@ -128,6 +159,16 @@ def analysis_preview(case_id: str):
         "total_calls": call_count,
         "total_contacts": contact_count,
     })
+
+
+@bp_analysis.post("/cases/<case_id>/analysis/cancel")
+def cancel_analysis(case_id: str):
+    """Signal the running analysis to stop after current artifact."""
+    evt = _get_cancel_event(case_id)
+    evt.set()
+    _push_event(case_id, "cancelled", {"case_id": case_id})
+    _close_stream(case_id)
+    return jsonify({"status": "cancel_requested"}), 200
 
 
 @bp_analysis.get("/cases/<case_id>/analysis/stream")
