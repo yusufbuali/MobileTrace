@@ -5,15 +5,36 @@ configured AI provider in parallel. Stores results back to analysis_results.
 """
 from __future__ import annotations
 
+import json
 import logging
+import re as _re
 import threading
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable
 
-from .ai_providers import AIProvider, AIProviderError, create_provider
+from .ai_providers import AIProvider, AIProviderError, OpenRouterProvider, create_provider
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_json_result(s: str) -> dict | None:
+    """Parse a JSON string, applying common LLM formatting fixes on failure."""
+    s = s.strip()
+    if not s:
+        return None
+    try:
+        return json.loads(s)
+    except Exception:
+        pass
+    cleaned = _re.sub(r'":\s*"([^"\\]*)"\s*:\s*[\d.]+', r'": "\1"', s)
+    cleaned = _re.sub(r',\s*([}\]])', r'\1', cleaned)
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        return None
+
 
 _PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
 _SYSTEM_PROMPT_PATH = _PROMPTS_DIR / "system_prompt.md"
@@ -147,6 +168,277 @@ class MobileAnalyzer:
                         pass
 
         return results
+
+    def analyze_multi(
+        self,
+        run_id: str,
+        case_id: str,
+        models: list[str],
+        artifact_filter: list[str] | None,
+        cancel_event: threading.Event | None,
+        progress_callback: Callable[[str, dict], None] | None,
+        db,
+    ) -> None:
+        """Run multi-model analysis: all models × all artifacts in parallel.
+
+        Results are stored per (run_id, provider). After all complete,
+        compute_consensus() is called to produce a consensus row.
+        """
+        from .database import get_db as _get_db
+
+        all_artifacts = self._collect_artifacts(case_id, db)
+        if artifact_filter is not None:
+            artifacts = {k: v for k, v in all_artifacts.items() if k in artifact_filter}
+        else:
+            artifacts = all_artifacts
+
+        # Build task list: (model, artifact_key, data)
+        tasks = [
+            (model, artifact_key, data)
+            for model in models
+            for artifact_key, data in artifacts.items()
+        ]
+
+        api_key = self.config.get("ai", {}).get("openrouter", {}).get("api_key", "")
+
+        def _worker(task):
+            model, artifact_key, data = task
+            if cancel_event and cancel_event.is_set():
+                return None
+            if progress_callback:
+                try:
+                    progress_callback("model_artifact_started", {
+                        "model": model, "artifact_key": artifact_key,
+                    })
+                except Exception:
+                    pass
+            result = self._analyze_artifact_for_model(
+                model=model,
+                artifact_key=artifact_key,
+                data=data,
+                run_id=run_id,
+                case_id=case_id,
+                api_key=api_key,
+            )
+            if progress_callback:
+                try:
+                    progress_callback("model_artifact_done", {
+                        "model": model,
+                        "artifact_key": artifact_key,
+                        "error": result.get("error"),
+                    })
+                except Exception:
+                    pass
+            return result
+
+        max_workers = min(len(tasks), 6) if tasks else 1
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(_worker, task): task for task in tasks}
+            for future in as_completed(futures):
+                if cancel_event and cancel_event.is_set():
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    break
+                try:
+                    result = future.result()
+                    if result is None:
+                        continue
+                    # Persist to DB (each thread uses its own connection via get_db())
+                    worker_db = _get_db()
+                    try:
+                        worker_db.execute(
+                            "INSERT OR REPLACE INTO analysis_results "
+                            "(case_id, artifact_key, result, provider, run_id) VALUES (?,?,?,?,?)",
+                            (case_id, result["artifact_key"],
+                             result.get("result", result.get("error", "")),
+                             result.get("provider", ""),
+                             run_id),
+                        )
+                        worker_db.commit()
+                    except Exception as exc:
+                        logger.warning("Could not persist multi-model result: %s", exc)
+                except Exception as exc:
+                    logger.warning("Multi-model worker error: %s", exc)
+
+        if cancel_event and cancel_event.is_set():
+            return
+
+        if progress_callback:
+            try:
+                progress_callback("consensus_computing", {"run_id": run_id})
+            except Exception:
+                pass
+
+        # Use a fresh DB connection for consensus
+        consensus_db = _get_db()
+        self.compute_consensus(run_id, case_id, consensus_db)
+
+    def _analyze_artifact_for_model(
+        self,
+        model: str,
+        artifact_key: str,
+        data: str,
+        run_id: str,
+        case_id: str,
+        api_key: str,
+    ) -> dict[str, Any]:
+        """Call one specific OpenRouter model for one artifact."""
+        try:
+            provider = OpenRouterProvider(api_key=api_key, model=model)
+        except Exception as exc:
+            return {"artifact_key": artifact_key, "result": "", "error": str(exc), "provider": model}
+
+        prompt_file = _ARTIFACT_PROMPT_MAP.get(artifact_key)
+        instructions = _load_prompt(prompt_file) if prompt_file else (
+            f"Analyze the following {artifact_key} data for forensic significance."
+        )
+        user_prompt = f"{instructions}\n\n## Data\n\n{data}"
+
+        try:
+            text = provider.analyze(
+                system_prompt=self._system_prompt,
+                user_prompt=user_prompt,
+                max_tokens=8192,
+            )
+            return {"artifact_key": artifact_key, "result": text, "provider": model}
+        except AIProviderError as exc:
+            return {"artifact_key": artifact_key, "result": "", "error": str(exc), "provider": model}
+
+    def compute_consensus(self, run_id: str, case_id: str, db) -> None:
+        """Merge multi-model results into a single consensus row per artifact."""
+        rows = db.execute(
+            "SELECT artifact_key, result, provider FROM analysis_results "
+            "WHERE run_id=? AND provider != 'consensus'",
+            (run_id,),
+        ).fetchall()
+
+        # Group: artifact_key → {provider: parsed_json}
+        artifacts: dict[str, dict[str, Any]] = defaultdict(dict)
+        for row in rows:
+            try:
+                parsed = _parse_json_result(row["result"] or "")
+            except Exception:
+                parsed = None
+            if parsed:
+                artifacts[row["artifact_key"]][row["provider"]] = parsed
+
+        _RISK_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+
+        def _highest_risk(levels: list[str]) -> str:
+            filtered = [l.upper() for l in levels if l.upper() in _RISK_ORDER]
+            if not filtered:
+                return "MEDIUM"
+            return min(filtered, key=lambda l: _RISK_ORDER.index(l))
+
+        for artifact_key, model_results in artifacts.items():
+            consensus: dict[str, Any] = {}
+
+            # ── conversation_risk_assessment ──────────────────────────────
+            thread_map: dict[str, list[dict]] = defaultdict(list)
+            for model, parsed in model_results.items():
+                cra = parsed.get("conversation_risk_assessment") or []
+                for t in cra:
+                    tid = (t.get("thread_id") or t.get("phone_number")
+                           or t.get("contact") or t.get("number") or "—")
+                    thread_map[tid].append({**t, "_model": model})
+
+            cra_consensus = []
+            for tid, entries in thread_map.items():
+                models_flagging = list({e["_model"] for e in entries})
+                risk_scores = [int(e.get("risk_score") or 0) for e in entries]
+                avg_score = round(sum(risk_scores) / len(risk_scores)) if risk_scores else 0
+                highest = _highest_risk([e.get("risk_level") or "" for e in entries])
+
+                seen_ki: set[str] = set()
+                all_ki: list[str] = []
+                for e in entries:
+                    for ki in (e.get("key_indicators") or []):
+                        if ki not in seen_ki:
+                            all_ki.append(ki)
+                            seen_ki.add(ki)
+
+                cra_consensus.append({
+                    "thread_id": tid,
+                    "risk_level": highest,
+                    "risk_score": avg_score,
+                    "messages": max((e.get("messages") or 0) for e in entries),
+                    "sent": max((e.get("sent") or 0) for e in entries),
+                    "received": max((e.get("received") or 0) for e in entries),
+                    "key_indicators": all_ki,
+                    "corroborated_by": models_flagging,
+                    "confidence": "HIGH" if len(models_flagging) >= 2 else "MEDIUM",
+                })
+
+            cra_consensus.sort(key=lambda t: (
+                _RISK_ORDER.index(t["risk_level"]) if t["risk_level"] in _RISK_ORDER else 99,
+                -len(t["corroborated_by"]),
+            ))
+            consensus["conversation_risk_assessment"] = cra_consensus
+
+            # ── risk_level_summary ────────────────────────────────────────
+            rls_list: list[str] = []
+            for parsed in model_results.values():
+                rls = str(parsed.get("risk_level_summary") or parsed.get("risk_level") or "")
+                m = _re.search(r'\b(CRITICAL|HIGH|MEDIUM|LOW)\b', rls, _re.IGNORECASE)
+                if m:
+                    rls_list.append(m.group(1).upper())
+            if rls_list:
+                consensus["risk_level_summary"] = _highest_risk(rls_list)
+
+            # ── key_findings ──────────────────────────────────────────────
+            finding_map: dict[str, list[dict]] = defaultdict(list)
+            for model, parsed in model_results.items():
+                kf = parsed.get("key_findings") or {}
+                if isinstance(kf, list):
+                    top = kf
+                else:
+                    top = kf.get("top_significant_conversations") or []
+                for f in top:
+                    tid = (f.get("thread_id") or f.get("thread_number")
+                           or f.get("contact") or "")
+                    finding_map[tid].append({**f, "_model": model})
+
+            top_findings = []
+            for tid, entries in finding_map.items():
+                entry = entries[0]
+                top_findings.append({
+                    "thread_id": tid,
+                    "summary": (entry.get("summary") or entry.get("significance")
+                                or entry.get("key_details") or ""),
+                    "key_messages": entry.get("key_messages") or [],
+                    "corroborated_by": list({e["_model"] for e in entries}),
+                })
+            top_findings.sort(key=lambda f: -len(f["corroborated_by"]))
+            consensus["key_findings"] = {"top_significant_conversations": top_findings}
+
+            # ── crime_indicators (if any model returned them) ─────────────
+            crime_map: dict[str, list[dict]] = defaultdict(list)
+            for model, parsed in model_results.items():
+                for c in (parsed.get("crime_indicators") or []):
+                    cat = c.get("category") or ""
+                    crime_map[cat].append({**c, "_model": model})
+            if crime_map:
+                crime_list = []
+                for cat, entries in crime_map.items():
+                    models_flagging = list({e["_model"] for e in entries})
+                    entry = entries[0]
+                    crime_list.append({
+                        **{k: v for k, v in entry.items() if not k.startswith("_")},
+                        "corroborated_by": models_flagging,
+                        "confidence": "HIGH" if len(models_flagging) >= 2 else "MEDIUM",
+                    })
+                crime_list.sort(key=lambda c: -len(c["corroborated_by"]))
+                consensus["crime_indicators"] = crime_list
+
+            # Store consensus row
+            try:
+                db.execute(
+                    "INSERT OR REPLACE INTO analysis_results "
+                    "(case_id, artifact_key, result, provider, run_id) VALUES (?,?,?,'consensus',?)",
+                    (case_id, artifact_key, json.dumps(consensus), run_id),
+                )
+                db.commit()
+            except Exception as exc:
+                logger.warning("Could not store consensus for %s: %s", artifact_key, exc)
 
     def _collect_artifacts(self, case_id: str, db) -> dict[str, str]:
         """Return dict of artifact_key → formatted text ready for LLM."""

@@ -274,6 +274,7 @@
             <div id="ap-artifact-list" class="ap-artifact-list"></div>
             <div class="ap-footer">
               <button id="ap-start-btn" class="btn-primary" disabled>Start Analysis</button>
+              <button id="ap-multi-model-btn" class="btn-secondary">&#9881; Multi-Model</button>
               <span id="ap-selection-count" class="ap-selection-count"></span>
             </div>
           </div>
@@ -326,6 +327,7 @@
               <button id="btn-view-report" class="btn-secondary">&#128196; View Full Report</button>
               <button id="btn-export-analysis" class="btn-secondary">&#128229; Export Markdown</button>
               <button id="btn-rerun-analysis" class="btn-secondary">&#8635; Re-run Analysis</button>
+              <button id="btn-multi-model" class="btn-secondary">&#9881; Multi-Model Analysis</button>
             </div>
           </div>
 
@@ -351,6 +353,37 @@
         </div>
       </div>
     </main>
+  </div>
+
+  <!-- Multi-Model Analysis Modal -->
+  <div id="multi-model-modal" class="mm-modal-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="mm-modal-title">
+    <div class="mm-modal">
+      <div class="mm-modal-header">
+        <span id="mm-modal-title" class="mm-modal-title">Multi-Model Analysis</span>
+        <button class="mm-modal-close" id="mm-modal-close" aria-label="Close">&times;</button>
+      </div>
+      <p class="mm-modal-desc">Select 2–5 OpenRouter models to run in parallel. A consensus is computed automatically — findings corroborated by multiple models get HIGH confidence.</p>
+      <div class="mm-search-wrap">
+        <input id="mm-model-search" type="search" class="mm-search" placeholder="Search models…" autocomplete="off" />
+      </div>
+      <div class="mm-selection-bar">
+        <span id="mm-selection-count" class="mm-sel-count">0 models selected</span>
+        <span id="mm-selection-error" class="mm-sel-error"></span>
+      </div>
+      <div id="mm-model-list" class="mm-model-list">
+        <div class="mm-loading">Loading models…</div>
+      </div>
+      <div class="mm-modal-footer">
+        <div class="mm-run-history-wrap">
+          <label class="mm-history-label" for="mm-run-history">Past runs:</label>
+          <select id="mm-run-history" class="mm-history-select">
+            <option value="">— none —</option>
+          </select>
+          <button id="mm-load-run-btn" class="btn-secondary mm-load-btn">Load</button>
+        </div>
+        <button id="mm-run-btn" class="btn-primary" disabled>Run Analysis</button>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="/static/js/api.js?v=20260308"></script>

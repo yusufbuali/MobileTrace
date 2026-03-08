@@ -13,6 +13,16 @@ _SCHEMA = """
 PRAGMA journal_mode=WAL;
 PRAGMA foreign_keys=ON;
 
+CREATE TABLE IF NOT EXISTS analysis_runs (
+    id TEXT PRIMARY KEY,
+    case_id TEXT NOT NULL,
+    models TEXT NOT NULL,
+    status TEXT DEFAULT 'running',
+    artifact_filter TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_analysis_runs_case_id ON analysis_runs(case_id);
+
 CREATE TABLE IF NOT EXISTS cases (
     id          TEXT PRIMARY KEY,
     title       TEXT NOT NULL,
@@ -122,6 +132,36 @@ END;
 """
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Apply schema migrations that cannot be expressed as idempotent DDL."""
+    cursor = conn.cursor()
+
+    # Migrate analysis_results: drop inline UNIQUE(case_id, artifact_key), add run_id
+    cursor.execute("PRAGMA table_info(analysis_results)")
+    cols = {r[1] for r in cursor.fetchall()}
+
+    if "run_id" not in cols:
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS analysis_results_v2 (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            case_id      TEXT REFERENCES cases(id) ON DELETE CASCADE,
+            artifact_key TEXT NOT NULL,
+            result       TEXT DEFAULT '',
+            provider     TEXT,
+            run_id       TEXT REFERENCES analysis_runs(id),
+            created_at   TEXT DEFAULT (datetime('now'))
+        );
+        INSERT OR IGNORE INTO analysis_results_v2
+            (id, case_id, artifact_key, result, provider, created_at)
+            SELECT id, case_id, artifact_key, result, provider, created_at
+            FROM analysis_results;
+        DROP TABLE analysis_results;
+        ALTER TABLE analysis_results_v2 RENAME TO analysis_results;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_analysis_results_multi
+            ON analysis_results(case_id, artifact_key, COALESCE(run_id,''), COALESCE(provider,''));
+        """)
+
+
 def init_db(db_path: str) -> None:
     global _db_path
     _db_path = db_path
@@ -129,6 +169,7 @@ def init_db(db_path: str) -> None:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.executescript(_SCHEMA)
+    _migrate(conn)
     conn.commit()
     conn.close()
 
