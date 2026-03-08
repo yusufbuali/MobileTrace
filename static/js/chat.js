@@ -4,8 +4,10 @@
  */
 import { apiFetch } from "./api.js";
 import { markdownToFragment, highlightConfidenceTokens } from "./markdown.js";
+import { selectThread } from "./conversations.js";
 
 let _activeCaseId = null;
+let _currentEs = null; // active EventSource for cancel
 
 // DOM refs (resolved lazily when the chat tab is first opened)
 function dom(id) { return document.getElementById(id); }
@@ -15,6 +17,135 @@ function dom(id) { return document.getElementById(id); }
 export function initChat(caseId) {
   _activeCaseId = caseId;
   _loadHistory();
+}
+
+// ── Analysis Preview ─────────────────────────────────────────────────────────
+
+export async function loadAnalysisPreview(caseId) {
+  const previewEl = dom("analysis-preview");
+  if (!previewEl) return;
+
+  // Hide results and stream, show preview
+  const resultsView = dom("analysis-results-view");
+  const streamEl = dom("analysis-stream");
+  const header = dom("analysis-progress-header");
+  if (resultsView) resultsView.classList.add("aph-hidden");
+  if (streamEl) streamEl.style.display = "none";
+  if (header) header.classList.add("aph-hidden");
+
+  let data;
+  try {
+    data = await apiFetch(`/api/cases/${caseId}/analysis/preview`);
+  } catch (err) {
+    previewEl.innerHTML = '<div class="ap-empty-state"><div class="ap-empty-state-icon">&#128269;</div><div class="ap-empty-state-text">Could not load analysis preview.</div></div>';
+    previewEl.style.display = "";
+    return;
+  }
+
+  // Evidence section
+  const evEl = dom("ap-evidence");
+  if (evEl) {
+    if (data.evidence && data.evidence.length) {
+      evEl.innerHTML = data.evidence.map(e =>
+        `<div class="ap-ev-row">
+          <span class="ap-ev-format">${e.format || "unknown"}</span>
+          <span class="ap-ev-path">${e.source_path || "uploaded file"}</span>
+          <span class="ap-ev-status ${e.parse_status === "done" ? "done" : "error"}">${e.parse_status}</span>
+        </div>`
+      ).join("");
+    } else {
+      evEl.innerHTML = '<div class="ap-empty-state"><div class="ap-empty-state-icon">&#128193;</div><div class="ap-empty-state-text">No evidence uploaded. Upload evidence first to run analysis.</div></div>';
+      const footer = previewEl.querySelector(".ap-footer");
+      const artHeader = previewEl.querySelector(".ap-artifacts-header");
+      const artList = dom("ap-artifact-list");
+      if (footer) footer.style.display = "none";
+      if (artHeader) artHeader.style.display = "none";
+      if (artList) artList.style.display = "none";
+      previewEl.style.display = "";
+      return;
+    }
+  }
+
+  // Artifact checkboxes
+  const listEl = dom("ap-artifact-list");
+  if (listEl) {
+    listEl.innerHTML = data.artifacts.map(a => {
+      const empty = a.count === 0;
+      const unit = a.type === "messages" ? "messages" : "records";
+      return `<label class="ap-artifact ${empty ? "empty" : "selected"}" data-key="${a.key}">
+        <input type="checkbox" value="${a.key}" ${empty ? "" : "checked"} />
+        <div class="ap-artifact-info">
+          <span class="ap-artifact-label">${a.label}</span>
+          <span>
+            <span class="ap-artifact-count">${a.count.toLocaleString()} ${unit}</span>
+            ${empty ? '<span class="ap-artifact-warn">&#9888; empty</span>' : ""}
+          </span>
+        </div>
+      </label>`;
+    }).join("");
+
+    // Wire checkbox changes
+    listEl.querySelectorAll("input[type=checkbox]").forEach(cb => {
+      cb.addEventListener("change", () => {
+        const label = cb.closest(".ap-artifact");
+        if (cb.checked) label.classList.add("selected");
+        else label.classList.remove("selected");
+        _updateSelectionCount(data.artifacts.length);
+      });
+    });
+  }
+
+  // Toggle all button
+  const toggleBtn = dom("ap-toggle-all");
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", () => {
+      const cbs = listEl.querySelectorAll("input[type=checkbox]");
+      const allChecked = [...cbs].filter(c => c.checked).length === cbs.length;
+      cbs.forEach(cb => {
+        cb.checked = !allChecked;
+        const label = cb.closest(".ap-artifact");
+        if (cb.checked) label.classList.add("selected");
+        else label.classList.remove("selected");
+      });
+      toggleBtn.textContent = allChecked ? "Select All" : "Deselect All";
+      _updateSelectionCount(data.artifacts.length);
+    });
+  }
+
+  // Start button
+  const startBtn = dom("ap-start-btn");
+  if (startBtn) {
+    startBtn.disabled = false;
+    startBtn.onclick = () => {
+      const selected = [...listEl.querySelectorAll("input[type=checkbox]:checked")].map(c => c.value);
+      if (!selected.length) return;
+      previewEl.style.display = "none";
+      _triggerWithArtifacts(caseId, selected);
+    };
+  }
+
+  _updateSelectionCount(data.artifacts.length);
+
+  // Show footer/header in case they were hidden
+  const footer = previewEl.querySelector(".ap-footer");
+  const artHeader = previewEl.querySelector(".ap-artifacts-header");
+  if (footer) footer.style.display = "";
+  if (artHeader) artHeader.style.display = "";
+  if (listEl) listEl.style.display = "";
+
+  previewEl.style.display = "";
+}
+
+function _updateSelectionCount(total) {
+  const listEl = dom("ap-artifact-list");
+  const countEl = dom("ap-selection-count");
+  const startBtn = dom("ap-start-btn");
+  const toggleBtn = dom("ap-toggle-all");
+  if (!listEl) return;
+  const checked = listEl.querySelectorAll("input[type=checkbox]:checked").length;
+  if (countEl) countEl.textContent = `${checked} of ${total} artifacts selected`;
+  if (startBtn) startBtn.disabled = checked === 0;
+  if (toggleBtn) toggleBtn.textContent = checked === total ? "Deselect All" : "Select All";
 }
 
 // ── History ─────────────────────────────────────────────────────────────────
@@ -133,24 +264,38 @@ function _setRadar({ state = "running", label = "", count = 0, total = 0, curren
   if (currentEl) currentEl.textContent = current ? `Currently: ${current}` : "";
 }
 
-export async function triggerAnalysis(caseId) {
-  // Reset UI: show radar, clear stream list, hide results view
-  _setRadar({ state: "running", label: "Starting analysis…", count: 0, total: 0 });
+async function _triggerWithArtifacts(caseId, artifacts) {
+  // Reset UI: show radar, clear stream list, hide results view + preview
+  _setRadar({ state: "running", label: "Starting analysis…", count: 0, total: artifacts.length });
   const streamList = dom("analysis-stream-list");
   const resultsView = dom("analysis-results-view");
+  const previewEl = dom("analysis-preview");
   if (streamList) streamList.innerHTML = "";
   if (resultsView) resultsView.classList.add("aph-hidden");
+  if (previewEl) previewEl.style.display = "none";
   const streamEl = dom("analysis-stream");
   if (streamEl) streamEl.style.display = "";
 
+  // Show cancel button
+  const cancelBtn = dom("aph-cancel-btn");
+  if (cancelBtn) {
+    cancelBtn.classList.remove("aph-hidden");
+    cancelBtn.onclick = () => _cancelAnalysis(caseId);
+  }
+
   try {
-    await apiFetch(`/api/cases/${caseId}/analyze`, { method: "POST" });
+    await apiFetch(`/api/cases/${caseId}/analyze`, {
+      method: "POST",
+      body: JSON.stringify({ artifacts }),
+    });
   } catch (err) {
     _setRadar({ state: "failed", label: `Failed to start: ${err.message}`, count: 0, total: 0 });
+    if (cancelBtn) cancelBtn.classList.add("aph-hidden");
     return;
   }
 
   const es = new EventSource(`/api/cases/${caseId}/analysis/stream`);
+  _currentEs = es;
   const done = [];
 
   es.addEventListener("artifact_done", (e) => {
@@ -160,32 +305,41 @@ export async function triggerAnalysis(caseId) {
       state: "running",
       label: `Analyzing ${d.artifact_key}…`,
       count: done.length,
-      total: done.length,   // total unknown until complete — update on complete
+      total: artifacts.length,
       current: d.artifact_key,
     });
-    // Add a live stream card
     if (streamList) {
       const card = document.createElement("div");
       card.className = "analysis-stream-card";
-      const conf = _extractConfidence(d.result || "");
       card.innerHTML = `
         <div class="asc-header">
           <span class="asc-title">${d.artifact_key}</span>
-          ${conf ? `<span class="confidence-inline ${_confidenceClass(conf)}">${conf}</span>` : ""}
+          <span class="asc-meta">${d.provider || ""}</span>
         </div>
-        <div class="markdown-output"></div>
+        <div class="asc-meta">${d.error ? "Error: " + d.error : "Done"}</div>
       `;
-      const mdEl = card.querySelector(".markdown-output");
-      if (mdEl) mdEl.appendChild(markdownToFragment(d.result || "(no result)"));
       streamList.appendChild(card);
     }
   });
 
   es.addEventListener("complete", () => {
-    _setRadar({ state: "complete", label: "Analysis complete", count: done.length, total: done.length, current: "" });
+    _setRadar({ state: "complete", label: "Analysis complete", count: done.length, total: artifacts.length, current: "" });
     es.close();
+    _currentEs = null;
+    if (cancelBtn) cancelBtn.classList.add("aph-hidden");
     if (streamEl) streamEl.style.display = "none";
     loadAnalysisResults(caseId);
+  });
+
+  es.addEventListener("cancelled", () => {
+    _setRadar({ state: "failed", label: "Analysis cancelled", count: done.length, total: artifacts.length, current: "" });
+    es.close();
+    _currentEs = null;
+    if (cancelBtn) cancelBtn.classList.add("aph-hidden");
+    // Show preview again so user can re-run
+    if (previewEl) previewEl.style.display = "";
+    // Still load any partial results
+    if (done.length > 0) loadAnalysisResults(caseId);
   });
 
   es.addEventListener("error", (e) => {
@@ -193,9 +347,26 @@ export async function triggerAnalysis(caseId) {
     if (e.data) {
       try { msg = JSON.parse(e.data).message || msg; } catch (_) {}
     }
-    _setRadar({ state: "failed", label: msg, count: done.length, total: done.length });
+    _setRadar({ state: "failed", label: msg, count: done.length, total: artifacts.length });
     es.close();
+    _currentEs = null;
+    if (cancelBtn) cancelBtn.classList.add("aph-hidden");
   });
+}
+
+async function _cancelAnalysis(caseId) {
+  try {
+    await apiFetch(`/api/cases/${caseId}/analysis/cancel`, { method: "POST" });
+  } catch (_) {}
+  if (_currentEs) {
+    _currentEs.close();
+    _currentEs = null;
+  }
+}
+
+export async function triggerAnalysis(caseId) {
+  // Called from the "Run Analysis" button in dashboard header — loads preview first
+  await loadAnalysisPreview(caseId);
 }
 
 export async function loadAnalysisResults(caseId) {
@@ -225,9 +396,24 @@ export async function loadAnalysisResults(caseId) {
     if (!p && r.result) return `**${_titleCase(r.artifact_key)}:** ${String(r.result).slice(0, 200).trim()}`;
     return null;
   }).filter(Boolean);
-  execContent.appendChild(
-    markdownToFragment(summaryParts.length ? summaryParts.join("\n\n") : "_No summary available._")
-  );
+  
+  const summaryFrag = markdownToFragment(summaryParts.length ? summaryParts.join("\n\n") : "_No summary available._");
+  // Enhance summary with jump links if applicable
+  summaryFrag.querySelectorAll("strong").forEach(bold => {
+    const text = bold.textContent.replace(":", "");
+    const matchingRow = rows.find(r => _titleCase(r.artifact_key) === text);
+    if (matchingRow) {
+      bold.classList.add("jump-link");
+      bold.onclick = () => {
+        const details = Array.from(findingsEl.querySelectorAll("details")).find(d => d.querySelector("summary span").textContent === text);
+        if (details) {
+          details.open = true;
+          details.scrollIntoView({ behavior: "smooth" });
+        }
+      };
+    }
+  });
+  execContent.appendChild(summaryFrag);
 
   // ── Per-Artifact Details ───────────────────────────────────────
   findingsEl.innerHTML = "";
@@ -248,7 +434,7 @@ export async function loadAnalysisResults(caseId) {
 
     const body = document.createElement("div");
     if (p) {
-      _renderJsonAnalysis(p, body);
+      _renderJsonAnalysis(p, body, r.artifact_key);
     } else {
       body.classList.add("markdown-output");
       body.appendChild(markdownToFragment(r.result || "(no result)"));
@@ -272,8 +458,10 @@ export async function loadAnalysisResults(caseId) {
     };
   }
 
-  // Show the results view
+  // Show the results view, hide preview
   resultsView.classList.remove("aph-hidden");
+  const previewEl = dom("analysis-preview");
+  if (previewEl) previewEl.style.display = "none";
 
   // Show radar in complete state if it's currently hidden (page reload case)
   const header = dom("analysis-progress-header");
@@ -353,8 +541,17 @@ function _normalizeAnalysis(raw) {
   return p;
 }
 
-function _renderJsonAnalysis(p, container) {
+function _jumpToThread(platform, threadId) {
+  // 1. Switch tab
+  const convBtn = document.querySelector('.tab-btn[data-tab="tab-conversations"]');
+  if (convBtn) convBtn.click();
+  // 2. Select thread
+  selectThread(platform, threadId);
+}
+
+function _renderJsonAnalysis(p, container, artifactKey = "") {
   const esc = s => String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const platform = artifactKey.split("_")[0] || null; // e.g. "whatsapp" from "whatsapp_messages"
 
   // Risk summary banner
   const rsum = p.risk_level_summary || p.summary || "";
@@ -382,7 +579,7 @@ function _renderJsonAnalysis(p, container) {
       tc.className = "analysis-thread-card";
       tc.innerHTML = `
         <div class="atc-header">
-          <span class="atc-thread-id">${esc(t.thread_id || "—")}</span>
+          <span class="atc-thread-id jump-link" data-platform="${esc(platform || "")}" data-thread="${esc(t.thread_id || "")}">${esc(t.thread_id || "—")}</span>
           ${rl ? `<span class="confidence-inline ${_confidenceClass(rl)}">${rl}</span>` : ""}
         </div>
         <div class="risk-bar-wrap">
@@ -396,6 +593,8 @@ function _renderJsonAnalysis(p, container) {
         </div>
         ${(t.key_indicators||[]).length ? `<ul class="atc-indicators">${(t.key_indicators||[]).map(i=>`<li${_isRtl(i) ? ' dir="rtl"' : ""}>${esc(i)}</li>`).join("")}</ul>` : ""}
       `;
+      // Handle click
+      tc.querySelector(".atc-thread-id").onclick = () => _jumpToThread(platform, t.thread_id);
       container.appendChild(tc);
     });
   }
@@ -413,13 +612,14 @@ function _renderJsonAnalysis(p, container) {
       const block = document.createElement("div");
       block.className = "analysis-finding-block";
       const _sum = tc.summary || "";
-      let inner = `<div class="afb-thread">${esc(tc.thread_id||"")}</div>
+      let inner = `<div class="afb-thread jump-link" data-platform="${esc(platform || "")}" data-thread="${esc(tc.thread_id || "")}">${esc(tc.thread_id||"")}</div>
                    <div class="afb-summary"${_isRtl(_sum) ? ' dir="rtl"' : ""}>${esc(_sum)}</div>`;
       (tc.key_messages||[]).forEach(km => {
         const _body = km.body || "";
         inner += `<div class="afb-msg"><div class="afb-msg-meta">${esc(km.timestamp||"")} · ${esc(km.direction||"")}</div><div${_isRtl(_body) ? ' dir="rtl"' : ""}>${esc(_body)}</div></div>`;
       });
       block.innerHTML = inner;
+      block.querySelector(".afb-thread").onclick = () => _jumpToThread(platform, tc.thread_id);
       container.appendChild(block);
     });
 
