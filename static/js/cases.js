@@ -1,5 +1,5 @@
 import { api, apiFetch } from "./api.js";
-import { initChat, triggerAnalysis, loadAnalysisResults } from "./chat.js";
+import { initChat, triggerAnalysis, loadAnalysisResults, loadAnalysisPreview } from "./chat.js";
 import { initConversations } from "./conversations.js";
 import { showToast } from "./toast.js";
 
@@ -27,7 +27,11 @@ function statusBadge(status) {
 
 function renderCases(cases) {
   caseList.innerHTML = cases.map(c => `
-    <div class="case-item ${c.id === activeCaseId ? "active" : ""}" data-id="${c.id}">
+    <div class="case-item ${c.id === activeCaseId ? "active" : ""}" 
+         data-id="${c.id}" 
+         role="button" 
+         aria-pressed="${c.id === activeCaseId ? "true" : "false"}"
+         tabindex="0">
       <div class="case-title">${c.title}</div>
       <div class="case-meta">
         ${c.officer || "&mdash;"} &middot; ${statusBadge(c.status)}
@@ -36,6 +40,12 @@ function renderCases(cases) {
   `).join("");
   caseList.querySelectorAll(".case-item").forEach(el => {
     el.addEventListener("click", () => openCase(el.dataset.id));
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openCase(el.dataset.id);
+      }
+    });
   });
 }
 
@@ -70,9 +80,9 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.setAttribute("aria-selected", "true");
     const target = document.getElementById(btn.dataset.tab);
     if (target) target.classList.add("active");
-    // Lazy-load analysis results when switching to analysis tab
+    // Load analysis preview when switching to analysis tab
     if (btn.dataset.tab === "tab-analysis" && activeCaseId) {
-      loadAnalysisResults(activeCaseId);
+      loadAnalysisPreview(activeCaseId);
     }
     // Load conversations when switching to conversations tab
     if (btn.dataset.tab === "tab-conversations") {
@@ -99,8 +109,21 @@ async function openCase(id) {
     const di = typeof c.device_info === "string" ? JSON.parse(c.device_info || "{}") : (c.device_info || {});
     const diEl = document.getElementById("dash-device-info");
     if (Object.keys(di).length) {
-      diEl.innerHTML = "<dl>" + Object.entries(di).map(([k, v]) =>
-        `<dt>${k}</dt><dd>${v}</dd>`).join("") + "</dl>";
+      diEl.innerHTML = `
+        <div class="device-card">
+          <div class="device-card-header">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18.01"/></svg>
+            <span>Device Identity</span>
+          </div>
+          <div class="device-grid">
+            ${Object.entries(di).map(([k, v]) => `
+              <div class="device-prop">
+                <div class="device-prop-label">${k}</div>
+                <div class="device-prop-value">${v}</div>
+              </div>
+            `).join("")}
+          </div>
+        </div>`;
     } else {
       diEl.innerHTML = '<p class="muted">No device info yet — upload evidence to populate.</p>';
     }
@@ -132,13 +155,15 @@ async function _loadStats(caseId) {
       apiFetch(`/api/cases/${caseId}/calls/count`).catch(() => ({ count: 0 })),
       apiFetch(`/api/cases/${caseId}/analysis`).catch(() => []),
     ]);
-    el.innerHTML = [
-      { label: "Messages",  value: msgs.count ?? msgs.length ?? 0 },
-      { label: "Contacts",  value: contacts.count ?? contacts.length ?? 0 },
-      { label: "Calls",     value: calls.count ?? calls.length ?? 0 },
-      { label: "Analyses",  value: Array.isArray(analysis) ? analysis.length : 0 },
-    ].map(s => `
-      <div class="stat-card">
+    const stats = [
+      { label: "Messages", value: msgs.count ?? msgs.length ?? 0, icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>', color: "blue" },
+      { label: "Contacts", value: contacts.count ?? contacts.length ?? 0, icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', color: "green" },
+      { label: "Calls",    value: calls.count ?? calls.length ?? 0, icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>', color: "orange" },
+      { label: "Analyses", value: Array.isArray(analysis) ? analysis.length : 0, icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>', color: "purple" },
+    ];
+    el.innerHTML = stats.map(s => `
+      <div class="stat-card stat-card-${s.color}">
+        <div class="stat-icon">${s.icon}</div>
         <div class="stat-value">${s.value}</div>
         <div class="stat-label">${s.label}</div>
       </div>`).join("");
@@ -185,11 +210,12 @@ if (btnAnalyze) {
   btnAnalyze.addEventListener("click", async () => {
     if (!activeCaseId) return;
     // Switch to analysis tab
-    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-btn").forEach(b => { b.classList.remove("active"); b.setAttribute("aria-selected", "false"); });
     document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
-    document.querySelector('[data-tab="tab-analysis"]')?.classList.add("active");
+    const analysisTabBtn = document.querySelector('[data-tab="tab-analysis"]');
+    if (analysisTabBtn) { analysisTabBtn.classList.add("active"); analysisTabBtn.setAttribute("aria-selected", "true"); }
     document.getElementById("tab-analysis")?.classList.add("active");
-    await triggerAnalysis(activeCaseId);
+    await loadAnalysisPreview(activeCaseId);
   });
 }
 
