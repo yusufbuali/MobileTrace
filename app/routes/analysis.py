@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import queue
 import threading
+import uuid
 from typing import Generator
 
 from flask import Blueprint, Response, current_app, jsonify, request, stream_with_context
@@ -16,6 +17,10 @@ bp_analysis = Blueprint("analysis", __name__, url_prefix="/api")
 # In-memory queues for SSE: case_id → queue of SSE event strings
 _progress_queues: dict[str, "queue.Queue[str | None]"] = {}
 _queues_lock = threading.Lock()
+
+# Per-run queues for multi-model SSE: run_id → queue
+_run_queues: dict[str, "queue.Queue[str | None]"] = {}
+_run_queues_lock = threading.Lock()
 
 _cancel_events: dict[str, threading.Event] = {}
 _cancel_lock = threading.Lock()
@@ -207,6 +212,195 @@ def get_analysis(case_id: str):
         row["result_parsed"] = _safe_json_parse(row.get("result") or "", _re)
         out.append(row)
     return jsonify(out)
+
+
+def _get_or_create_run_queue(run_id: str) -> "queue.Queue[str | None]":
+    with _run_queues_lock:
+        if run_id not in _run_queues:
+            _run_queues[run_id] = queue.Queue(maxsize=500)
+        return _run_queues[run_id]
+
+
+def _push_run_event(run_id: str, event_type: str, data: dict) -> None:
+    q = _get_or_create_run_queue(run_id)
+    payload = f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+    try:
+        q.put_nowait(payload)
+    except queue.Full:
+        pass
+
+
+def _close_run_stream(run_id: str) -> None:
+    q = _get_or_create_run_queue(run_id)
+    try:
+        q.put_nowait(None)
+    except queue.Full:
+        pass
+
+
+@bp_analysis.post("/cases/<case_id>/analyze/multi")
+def trigger_multi_analysis(case_id: str):
+    """Start a multi-model analysis run (2–5 OpenRouter models)."""
+    db = get_db()
+    row = db.execute("SELECT id FROM cases WHERE id=?", (case_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "case not found"}), 404
+
+    body = request.get_json(silent=True) or {}
+    models = body.get("models")
+    artifact_filter = body.get("artifacts")  # list or None
+
+    if not models or not isinstance(models, list):
+        return jsonify({"error": "models list required"}), 400
+    if len(models) < 2 or len(models) > 5:
+        return jsonify({"error": "select 2–5 models"}), 400
+
+    run_id = str(uuid.uuid4())
+    db.execute(
+        "INSERT INTO analysis_runs (id, case_id, models, status, artifact_filter) VALUES (?,?,?,?,?)",
+        (run_id, case_id, json.dumps(models),
+         "running",
+         json.dumps(artifact_filter) if artifact_filter else None),
+    )
+    db.commit()
+
+    config = current_app.config["MT_CONFIG"]
+    cancel_evt = threading.Event()
+
+    def _run():
+        def _callback(event_type: str, data: dict) -> None:
+            _push_run_event(run_id, event_type, data)
+
+        try:
+            analyzer = MobileAnalyzer(config)
+            analyzer.analyze_multi(
+                run_id=run_id,
+                case_id=case_id,
+                models=models,
+                artifact_filter=artifact_filter,
+                cancel_event=cancel_evt,
+                progress_callback=_callback,
+                db=get_db(),
+            )
+            get_db().execute(
+                "UPDATE analysis_runs SET status='complete' WHERE id=?", (run_id,)
+            )
+            get_db().commit()
+            _push_run_event(run_id, "complete", {"run_id": run_id, "case_id": case_id})
+        except Exception as exc:
+            try:
+                get_db().execute(
+                    "UPDATE analysis_runs SET status='error' WHERE id=?", (run_id,)
+                )
+                get_db().commit()
+            except Exception:
+                pass
+            _push_run_event(run_id, "error", {"message": str(exc)})
+        finally:
+            _close_run_stream(run_id)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+    return jsonify({"run_id": run_id}), 202
+
+
+@bp_analysis.get("/cases/<case_id>/analysis/multi")
+def list_multi_runs(case_id: str):
+    """List all multi-model analysis runs for a case."""
+    db = get_db()
+    row = db.execute("SELECT id FROM cases WHERE id=?", (case_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "case not found"}), 404
+
+    runs = db.execute(
+        "SELECT id, models, status, artifact_filter, created_at FROM analysis_runs "
+        "WHERE case_id=? ORDER BY created_at DESC",
+        (case_id,),
+    ).fetchall()
+
+    out = []
+    for r in runs:
+        out.append({
+            "id": r["id"],
+            "models": json.loads(r["models"]),
+            "status": r["status"],
+            "artifact_filter": json.loads(r["artifact_filter"]) if r["artifact_filter"] else None,
+            "created_at": r["created_at"],
+        })
+    return jsonify(out)
+
+
+@bp_analysis.get("/cases/<case_id>/analysis/multi/<run_id>")
+def get_multi_run_results(case_id: str, run_id: str):
+    """Return all results for a specific multi-model run, grouped by artifact."""
+    import re as _re
+    db = get_db()
+
+    run_row = db.execute(
+        "SELECT id, models, status, created_at FROM analysis_runs WHERE id=? AND case_id=?",
+        (run_id, case_id),
+    ).fetchone()
+    if not run_row:
+        return jsonify({"error": "run not found"}), 404
+
+    rows = db.execute(
+        "SELECT artifact_key, result, provider, created_at FROM analysis_results "
+        "WHERE run_id=? ORDER BY artifact_key, provider",
+        (run_id,),
+    ).fetchall()
+
+    # Group by artifact_key
+    artifact_map: dict[str, dict] = {}
+    for r in rows:
+        akey = r["artifact_key"]
+        if akey not in artifact_map:
+            artifact_map[akey] = {"artifact_key": akey, "consensus": None, "models_breakdown": []}
+        parsed = _safe_json_parse(r["result"] or "", _re)
+        entry = {
+            "provider": r["provider"],
+            "result": r["result"],
+            "result_parsed": parsed,
+            "created_at": r["created_at"],
+        }
+        if r["provider"] == "consensus":
+            artifact_map[akey]["consensus"] = entry
+        else:
+            artifact_map[akey]["models_breakdown"].append(entry)
+
+    return jsonify({
+        "run": {
+            "id": run_row["id"],
+            "models": json.loads(run_row["models"]),
+            "status": run_row["status"],
+            "created_at": run_row["created_at"],
+        },
+        "artifacts": list(artifact_map.values()),
+    })
+
+
+@bp_analysis.get("/cases/<case_id>/analysis/multi/<run_id>/stream")
+def multi_run_stream(case_id: str, run_id: str):
+    """SSE endpoint for multi-model run progress."""
+    q = _get_or_create_run_queue(run_id)
+
+    def _generate() -> Generator[str, None, None]:
+        yield "event: connected\ndata: {}\n\n"
+        while True:
+            try:
+                event = q.get(timeout=30)
+            except queue.Empty:
+                yield ": keepalive\n\n"
+                continue
+            if event is None:
+                break
+            yield event
+
+    return Response(
+        stream_with_context(_generate()),
+        content_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 def _safe_json_parse(s: str, re_mod) -> dict | None:

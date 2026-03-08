@@ -124,6 +124,9 @@ export async function loadAnalysisPreview(caseId) {
     };
   }
 
+  // Wire multi-model button in preview footer
+  _wireMultiModelButtons(caseId);
+
   _updateSelectionCount(data.artifacts.length);
 
   // Show footer/header in case they were hidden
@@ -552,6 +555,8 @@ export async function loadAnalysisResults(caseId) {
     };
   }
 
+  _wireMultiModelButtons(caseId);
+
   // Show the results view, hide preview
   resultsView.classList.remove("aph-hidden");
   const previewEl = dom("analysis-preview");
@@ -805,3 +810,416 @@ function _jsonRiskLevel(p) {
   });
   return top;
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Multi-Model Analysis
+// ══════════════════════════════════════════════════════════════════════════════
+
+let _mmCurrentEs = null;  // active multi-model EventSource
+
+// Wire multi-model buttons (called from loadAnalysisResults and loadAnalysisPreview)
+function _wireMultiModelButtons(caseId) {
+  ["btn-multi-model", "ap-multi-model-btn"].forEach(id => {
+    const btn = dom(id);
+    if (btn) btn.onclick = () => openMultiModelModal(caseId);
+  });
+}
+
+export function openMultiModelModal(caseId) {
+  const modal = dom("multi-model-modal");
+  if (!modal) return;
+  modal.style.display = "flex";
+
+  // Reset state
+  dom("mm-model-search").value = "";
+  dom("mm-selection-error").textContent = "";
+  _updateMmSelectionCount([]);
+
+  // Load model list
+  _loadMmModels(caseId);
+  // Load run history
+  _loadMmRunHistory(caseId);
+
+  // Wire close button
+  dom("mm-modal-close").onclick = () => { modal.style.display = "none"; };
+  modal.onclick = (e) => { if (e.target === modal) modal.style.display = "none"; };
+
+  // Wire run button
+  dom("mm-run-btn").onclick = () => _startMultiModelAnalysis(caseId);
+
+  // Wire load run button
+  dom("mm-load-run-btn").onclick = () => {
+    const sel = dom("mm-run-history");
+    const runId = sel?.value;
+    if (!runId) return;
+    modal.style.display = "none";
+    _loadMultiRunResults(caseId, runId);
+  };
+
+  // Wire search
+  dom("mm-model-search").oninput = (e) => _filterMmModels(e.target.value);
+}
+
+let _mmAllModels = [];
+
+async function _loadMmModels(caseId) {
+  const listEl = dom("mm-model-list");
+  if (!listEl) return;
+  listEl.innerHTML = '<div class="mm-loading">Loading models from OpenRouter…</div>';
+
+  try {
+    const models = await apiFetch("/api/settings/openrouter-models");
+    _mmAllModels = Array.isArray(models) ? models : [];
+    _renderMmModels(_mmAllModels);
+  } catch (err) {
+    listEl.innerHTML = `<div class="mm-error">Could not load models: ${err.message}</div>`;
+  }
+}
+
+function _renderMmModels(models) {
+  const listEl = dom("mm-model-list");
+  if (!listEl) return;
+  if (!models.length) {
+    listEl.innerHTML = '<div class="mm-empty">No models found.</div>';
+    return;
+  }
+  listEl.innerHTML = models.map(m => {
+    const price = m.prompt_per_m === 0
+      ? '<span class="mm-free">FREE</span>'
+      : `<span class="mm-price">$${m.prompt_per_m}/M in · $${m.completion_per_m}/M out</span>`;
+    const ctx = m.context_length ? `${(m.context_length/1000).toFixed(0)}k ctx` : "";
+    return `<label class="mm-model-item" data-id="${m.id}">
+      <input type="checkbox" value="${m.id}" class="mm-cb" />
+      <div class="mm-model-info">
+        <span class="mm-model-name">${m.name}</span>
+        <span class="mm-model-meta">${ctx} ${price}</span>
+      </div>
+    </label>`;
+  }).join("");
+
+  listEl.querySelectorAll(".mm-cb").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const selected = _getMmSelected();
+      _updateMmSelectionCount(selected);
+    });
+  });
+}
+
+function _filterMmModels(query) {
+  const q = query.toLowerCase().trim();
+  const filtered = q ? _mmAllModels.filter(m =>
+    m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q)
+  ) : _mmAllModels;
+  _renderMmModels(filtered);
+}
+
+function _getMmSelected() {
+  const listEl = dom("mm-model-list");
+  if (!listEl) return [];
+  return [...listEl.querySelectorAll(".mm-cb:checked")].map(cb => cb.value);
+}
+
+function _updateMmSelectionCount(selected) {
+  const n = selected.length;
+  const countEl = dom("mm-selection-count");
+  const errEl = dom("mm-selection-error");
+  const runBtn = dom("mm-run-btn");
+  if (countEl) countEl.textContent = `${n} model${n !== 1 ? "s" : ""} selected`;
+  if (errEl) {
+    errEl.textContent = n > 5 ? "Maximum 5 models" : n === 1 ? "Select at least 2 models" : "";
+  }
+  if (runBtn) runBtn.disabled = n < 2 || n > 5;
+}
+
+async function _loadMmRunHistory(caseId) {
+  const sel = dom("mm-run-history");
+  if (!sel) return;
+  try {
+    const runs = await apiFetch(`/api/cases/${caseId}/analysis/multi`);
+    if (!runs.length) return;
+    sel.innerHTML = '<option value="">— select a past run —</option>' +
+      runs.map(r => {
+        const models = r.models.map(m => m.split("/").pop()).join(", ");
+        const date = r.created_at.slice(0, 16).replace("T", " ");
+        return `<option value="${r.id}">[${date}] ${models} (${r.status})</option>`;
+      }).join("");
+  } catch (_) {
+    // No history — ok
+  }
+}
+
+async function _startMultiModelAnalysis(caseId) {
+  const selected = _getMmSelected();
+  if (selected.length < 2 || selected.length > 5) return;
+
+  const modal = dom("multi-model-modal");
+  if (modal) modal.style.display = "none";
+
+  // Show progress grid UI
+  _showMultiModelProgress(caseId, selected);
+
+  let runId;
+  try {
+    const resp = await apiFetch(`/api/cases/${caseId}/analyze/multi`, {
+      method: "POST",
+      body: JSON.stringify({ models: selected }),
+    });
+    runId = resp.run_id;
+  } catch (err) {
+    _setRadar({ state: "failed", label: `Failed to start: ${err.message}`, count: 0, total: 0 });
+    return;
+  }
+
+  // Subscribe to SSE for this run
+  if (_mmCurrentEs) { _mmCurrentEs.close(); _mmCurrentEs = null; }
+  const es = new EventSource(`/api/cases/${caseId}/analysis/multi/${runId}/stream`);
+  _mmCurrentEs = es;
+
+  const totalTasks = selected.length * Object.keys(_mmGridCells).length;
+  let doneTasks = 0;
+
+  es.addEventListener("model_artifact_started", (e) => {
+    const d = JSON.parse(e.data);
+    _setMmCell(d.model, d.artifact_key, "running");
+  });
+
+  es.addEventListener("model_artifact_done", (e) => {
+    const d = JSON.parse(e.data);
+    doneTasks++;
+    _setMmCell(d.model, d.artifact_key, d.error ? "error" : "done");
+    _setRadar({
+      state: "running",
+      label: `Running ${d.model.split("/").pop()} × ${d.artifact_key}…`,
+      count: doneTasks,
+      total: totalTasks,
+    });
+  });
+
+  es.addEventListener("consensus_computing", () => {
+    _setRadar({ state: "running", label: "Computing consensus…", count: totalTasks, total: totalTasks });
+  });
+
+  es.addEventListener("complete", () => {
+    _setRadar({ state: "complete", label: "Multi-model analysis complete", count: totalTasks, total: totalTasks });
+    es.close();
+    _mmCurrentEs = null;
+    _loadMultiRunResults(caseId, runId);
+  });
+
+  es.addEventListener("error", (e) => {
+    let msg = "Multi-model analysis failed.";
+    if (e.data) { try { msg = JSON.parse(e.data).message || msg; } catch (_) {} }
+    _setRadar({ state: "failed", label: msg, count: doneTasks, total: totalTasks });
+    es.close();
+    _mmCurrentEs = null;
+  });
+}
+
+// ── Progress grid ─────────────────────────────────────────────────────────────
+
+let _mmGridCells = {}; // { "model::artifact_key": <td element> }
+
+function _showMultiModelProgress(caseId, models) {
+  const resultsView = dom("analysis-results-view");
+  const previewEl = dom("analysis-preview");
+  const streamEl = dom("analysis-stream");
+  if (resultsView) resultsView.classList.add("aph-hidden");
+  if (previewEl) previewEl.style.display = "none";
+
+  _mmGridCells = {};
+
+  // Build grid: rows=models, cols=artifacts
+  // We'll use artifact keys from the preview if loaded; fallback to known keys
+  const ARTIFACT_KEYS = ["sms", "whatsapp", "telegram", "signal", "call_logs", "contacts"];
+
+  const table = document.createElement("table");
+  table.className = "mm-grid-table";
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  headerRow.innerHTML = "<th>Model</th>" + ARTIFACT_KEYS.map(k =>
+    `<th>${k.replace(/_/g, " ")}</th>`
+  ).join("");
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  models.forEach(model => {
+    const tr = document.createElement("tr");
+    const modelShort = model.split("/").pop();
+    tr.innerHTML = `<td class="mm-grid-model" title="${model}">${modelShort}</td>`;
+    ARTIFACT_KEYS.forEach(key => {
+      const td = document.createElement("td");
+      td.className = "mm-grid-cell mm-cell-pending";
+      td.title = `${modelShort} × ${key}`;
+      td.innerHTML = "·";
+      _mmGridCells[`${model}::${key}`] = td;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+
+  const streamList = dom("analysis-stream-list");
+  if (streamList) {
+    streamList.innerHTML = "";
+    streamList.appendChild(table);
+  }
+  if (streamEl) streamEl.style.display = "";
+
+  _setRadar({ state: "running", label: "Starting multi-model analysis…", count: 0, total: models.length * ARTIFACT_KEYS.length });
+}
+
+function _setMmCell(model, artifactKey, state) {
+  const key = `${model}::${artifactKey}`;
+  const td = _mmGridCells[key];
+  if (!td) return;
+  td.className = `mm-grid-cell mm-cell-${state}`;
+  td.innerHTML = state === "running" ? "…" : state === "done" ? "✓" : state === "error" ? "✗" : "·";
+}
+
+// ── Load & display a completed multi-model run ─────────────────────────────────
+
+async function _loadMultiRunResults(caseId, runId) {
+  let data;
+  try {
+    data = await apiFetch(`/api/cases/${caseId}/analysis/multi/${runId}`);
+  } catch (err) {
+    return;
+  }
+
+  const resultsView = dom("analysis-results-view");
+  const execContent = dom("analysis-exec-content");
+  const findingsEl = dom("analysis-findings");
+  const streamEl = dom("analysis-stream");
+  if (!resultsView || !execContent || !findingsEl) return;
+
+  if (streamEl) streamEl.style.display = "none";
+
+  const artifacts = data.artifacts || [];
+  const consensusRows = artifacts.map(a => ({
+    artifact_key: a.artifact_key,
+    result: a.consensus?.result || "",
+    result_parsed: a.consensus?.result_parsed || null,
+    provider: "consensus",
+    models_breakdown: a.models_breakdown || [],
+  })).filter(r => r.result_parsed || r.result);
+
+  if (!consensusRows.length) {
+    execContent.innerHTML = '<p class="muted">No consensus results available yet.</p>';
+    resultsView.classList.remove("aph-hidden");
+    return;
+  }
+
+  // Insights bar — same logic as single-model
+  let existingBar = resultsView.querySelector(".analysis-insights-bar");
+  if (existingBar) existingBar.remove();
+  const insightsBar = document.createElement("div");
+  insightsBar.className = "analysis-insights-bar";
+  const totalThreads = consensusRows.reduce((s, r) =>
+    s + ((r.result_parsed?.conversation_risk_assessment) || []).length, 0);
+  const topRisk = consensusRows.reduce((best, r) => {
+    const rl = _jsonRiskLevel(r.result_parsed || {});
+    if (!best) return rl;
+    const order = ["CRITICAL","HIGH","MEDIUM","LOW"];
+    return order.indexOf(rl) < order.indexOf(best) ? rl : best;
+  }, null);
+  insightsBar.innerHTML = [
+    { value: consensusRows.length, label: "Artifacts" },
+    { value: totalThreads, label: "Threads" },
+    topRisk ? { value: `<span class="confidence-inline ${_confidenceClass(topRisk)}">${topRisk}</span>`, label: "Risk" } : null,
+    { value: `<span class="confidence-inline confidence-high">CONSENSUS</span>`, label: `${data.run.models.length} models` },
+  ].filter(Boolean).map(c =>
+    `<div class="insight-chip"><span class="insight-chip-value">${c.value}</span><span class="insight-chip-label">${c.label}</span></div>`
+  ).join("");
+  resultsView.insertBefore(insightsBar, resultsView.firstChild);
+
+  // Executive summary
+  execContent.innerHTML = "";
+  const summaryParts = consensusRows.map(r => {
+    const p = r.result_parsed ? _normalizeAnalysis(r.result_parsed) : null;
+    const rsum = p && (p.risk_level_summary || p.executive_summary || p.summary);
+    if (rsum) return `**${_titleCase(r.artifact_key)}:** ${rsum}`;
+    return null;
+  }).filter(Boolean);
+  execContent.appendChild(markdownToFragment(summaryParts.length ? summaryParts.join("\n\n") : "_No summary available._"));
+
+  // Per-artifact findings with consensus + breakdown
+  findingsEl.innerHTML = "";
+  consensusRows.forEach((r, i) => {
+    const p = r.result_parsed ? _normalizeAnalysis(r.result_parsed) : null;
+    const conf = p ? _jsonRiskLevel(p) : null;
+
+    const details = document.createElement("details");
+    if (i === 0) details.open = true;
+
+    const summary = document.createElement("summary");
+    summary.innerHTML = `
+      <span style="flex:1">${_titleCase(r.artifact_key)}</span>
+      ${conf ? `<span class="confidence-inline ${_confidenceClass(conf)}">${conf}</span>` : ""}
+      <span class="confidence-inline confidence-high" style="margin-left:4px;font-size:0.7em">CONSENSUS</span>
+    `;
+    details.appendChild(summary);
+
+    const body = document.createElement("div");
+    if (p) {
+      _renderJsonAnalysis(p, body, r.artifact_key);
+    } else {
+      body.classList.add("markdown-output");
+      body.appendChild(markdownToFragment(r.result || "(no result)"));
+    }
+    details.appendChild(body);
+
+    // Per-model breakdown
+    if (r.models_breakdown && r.models_breakdown.length) {
+      const breakdown = document.createElement("details");
+      breakdown.className = "mm-breakdown";
+      const bsummary = document.createElement("summary");
+      bsummary.textContent = `Per-Model Breakdown (${r.models_breakdown.length} models)`;
+      breakdown.appendChild(bsummary);
+
+      r.models_breakdown.forEach(mb => {
+        const mdetails = document.createElement("details");
+        mdetails.className = "mm-model-panel";
+        const msum = document.createElement("summary");
+        const mbParsed = mb.result_parsed ? _normalizeAnalysis(mb.result_parsed) : null;
+        const mbConf = mbParsed ? _jsonRiskLevel(mbParsed) : null;
+        msum.innerHTML = `<span style="flex:1">${mb.provider}</span>${mbConf ? `<span class="confidence-inline ${_confidenceClass(mbConf)}">${mbConf}</span>` : ""}`;
+        mdetails.appendChild(msum);
+        const mbody = document.createElement("div");
+        mbody.className = "mm-model-body";
+        if (mbParsed) {
+          _renderJsonAnalysis(mbParsed, mbody, r.artifact_key);
+        } else {
+          mbody.classList.add("markdown-output");
+          mbody.appendChild(markdownToFragment(mb.result || "(no result)"));
+        }
+        mdetails.appendChild(mbody);
+        breakdown.appendChild(mdetails);
+      });
+
+      details.appendChild(breakdown);
+    }
+
+    findingsEl.appendChild(details);
+  });
+
+  // Action buttons
+  const rerunBtn = dom("btn-rerun-analysis");
+  if (rerunBtn) {
+    rerunBtn.onclick = () => {
+      resultsView.classList.add("aph-hidden");
+      const header = dom("analysis-progress-header");
+      if (header) header.classList.add("aph-hidden");
+      triggerAnalysis(caseId);
+    };
+  }
+  const multiBtn = dom("btn-multi-model");
+  if (multiBtn) multiBtn.onclick = () => openMultiModelModal(caseId);
+
+  resultsView.classList.remove("aph-hidden");
+  const previewEl = dom("analysis-preview");
+  if (previewEl) previewEl.style.display = "none";
+  _setRadar({ state: "complete", label: "Multi-model analysis complete", count: consensusRows.length, total: consensusRows.length });
+}
+
+// openMultiModelModal is available to cases.js via the module export below
