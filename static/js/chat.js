@@ -232,7 +232,7 @@ export async function loadAnalysisResults(caseId) {
   // ── Per-Artifact Details ───────────────────────────────────────
   findingsEl.innerHTML = "";
   rows.forEach((r, i) => {
-    const p = r.result_parsed || null;
+    const p = r.result_parsed ? _normalizeAnalysis(r.result_parsed) : null;
     const conf = p ? _jsonRiskLevel(p) : _extractConfidence(r.result || "");
 
     const details = document.createElement("details");
@@ -284,6 +284,73 @@ export async function loadAnalysisResults(caseId) {
 
 function _titleCase(str) {
   return String(str || "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// ── Analysis JSON normalizer ──────────────────────────────────────────────────
+// LLMs return inconsistent field names and nesting. This maps everything to the
+// canonical schema before rendering.
+
+function _normalizeAnalysis(raw) {
+  let p = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+
+  // 1. Unwrap "analysis" wrapper  e.g. { "analysis": { ... } }
+  if (p.analysis && typeof p.analysis === "object" && !Array.isArray(p.analysis)) {
+    p = { ...p.analysis, ...p };
+    delete p.analysis;
+  }
+
+  // 2. Alias contact_risk_assessment → conversation_risk_assessment
+  if (!p.conversation_risk_assessment && p.contact_risk_assessment) {
+    p.conversation_risk_assessment = p.contact_risk_assessment;
+  }
+
+  // 3. Normalize each CRA item's field names
+  if (Array.isArray(p.conversation_risk_assessment)) {
+    p.conversation_risk_assessment = p.conversation_risk_assessment.map(item => ({
+      ...item,
+      // thread_id alias: phone_number / contact / number
+      thread_id: item.thread_id || item.phone_number || item.contact || item.number || "—",
+      // messages alias: calls
+      messages: item.messages ?? item.calls ?? 0,
+      // sent alias: outgoing
+      sent: item.sent ?? item.outgoing ?? 0,
+      // received alias: incoming
+      received: item.received ?? item.incoming ?? 0,
+      // key_indicators: string → array, or indicators alias
+      key_indicators: Array.isArray(item.key_indicators)
+        ? item.key_indicators
+        : item.key_indicators
+          ? [item.key_indicators]
+          : Array.isArray(item.indicators) ? item.indicators : [],
+    }));
+  }
+
+  // 4. Normalize key_findings: array → { top_significant_conversations: [...] }
+  if (Array.isArray(p.key_findings)) {
+    p.key_findings = {
+      top_significant_conversations: p.key_findings.map(f => ({
+        thread_id: f.thread_id || f.thread_number || f.category || f.contact || "",
+        summary:   f.summary || f.details || f.significance || f.key_details || "",
+        key_messages: Array.isArray(f.key_messages) ? f.key_messages : [],
+      })),
+    };
+  }
+
+  // 5. Normalize key_findings items inside dict form
+  if (p.key_findings && Array.isArray(p.key_findings.top_significant_conversations)) {
+    p.key_findings.top_significant_conversations = p.key_findings.top_significant_conversations.map(tc => ({
+      ...tc,
+      thread_id: tc.thread_id || tc.thread_number || tc.contact || "",
+      summary:   tc.summary || tc.significance || tc.key_details || "",
+    }));
+  }
+
+  // 6. Normalize risk_level_summary from alternate fields
+  if (!p.risk_level_summary) {
+    p.risk_level_summary = p.risk_classification || p.executive_summary || p.overall_assessment || "";
+  }
+
+  return p;
 }
 
 function _renderJsonAnalysis(p, container) {
@@ -363,7 +430,12 @@ function _renderJsonAnalysis(p, container) {
   }
 
   // Remaining keys — generic kv
-  const shown = new Set(["conversation_risk_assessment","key_findings","risk_level_summary","summary","risk_level","confidence_level"]);
+  const shown = new Set([
+    "conversation_risk_assessment","contact_risk_assessment",
+    "key_findings","risk_level_summary","summary","risk_level",
+    "confidence_level","risk_classification","executive_summary",
+    "overall_assessment","analysis",
+  ]);
   const extra = Object.entries(p).filter(([k]) => !shown.has(k));
   if (extra.length) {
     const grid = document.createElement("div");
@@ -374,7 +446,16 @@ function _renderJsonAnalysis(p, container) {
       key.textContent = k.replace(/_/g, " ");
       const val = document.createElement("span");
       val.className = "akg-val";
-      val.textContent = typeof v === "object" ? JSON.stringify(v) : String(v);
+      if (typeof v === "object" && v !== null) {
+        val.classList.add("markdown-output");
+        val.appendChild(markdownToFragment(
+          Array.isArray(v)
+            ? v.map(i => `- ${typeof i === "object" ? JSON.stringify(i) : i}`).join("\n")
+            : Object.entries(v).map(([k2, v2]) => `**${k2.replace(/_/g," ")}:** ${typeof v2 === "object" ? JSON.stringify(v2) : v2}`).join("\n")
+        ));
+      } else {
+        val.textContent = String(v ?? "");
+      }
       grid.appendChild(key);
       grid.appendChild(val);
     });
