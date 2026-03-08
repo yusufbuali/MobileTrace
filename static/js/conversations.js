@@ -24,6 +24,43 @@ export function initConversations(caseId) {
   _wireSearch();
 }
 
+/**
+ * Jump to a specific thread and optionally highlight a message.
+ */
+export async function selectThread(platform, threadId, messageId = null) {
+  if (!_caseId) return;
+
+  // 1. Filter by platform if needed
+  if (platform && _activePlatform !== platform) {
+    _activePlatform = platform;
+    _renderPlatformPills();
+    _renderThreadList(_threads.filter(t => t.platform === platform));
+  }
+
+  // 2. Open the thread
+  const threadData = _threads.find(t => t.platform === platform && t.thread === threadId);
+  await _openThread(platform, threadId, threadData?.message_count);
+
+  // 3. Highlight message if ID provided
+  if (messageId) {
+    const msgs = dom("conv-messages");
+    const bubble = msgs.querySelector(`[data-msg-id="${messageId}"]`);
+    if (bubble) {
+      bubble.scrollIntoView({ behavior: "smooth", block: "center" });
+      bubble.classList.add("highlight-pulse");
+      setTimeout(() => bubble.classList.remove("highlight-pulse"), 3000);
+    }
+  }
+
+  // 4. Update sidebar selection
+  const list = dom("conv-thread-list");
+  list.querySelectorAll(".conv-thread-item").forEach(el => {
+    const isTarget = el.dataset.platform === platform && el.querySelector(".conv-thread-name").textContent === threadId;
+    el.classList.toggle("active", isTarget);
+    if (isTarget) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  });
+}
+
 function _showNoCaseState() {
   const header = dom("conv-header");
   const msgs = dom("conv-messages");
@@ -126,6 +163,7 @@ function _renderThreadList(threads) {
 // ── Thread view ───────────────────────────────────────────────────────────────
 
 async function _openThread(platform, thread, messageCount) {
+  _activeQuery = "";
   const header = dom("conv-header");
   const msgs = dom("conv-messages");
   if (!header || !msgs) return;
@@ -176,6 +214,7 @@ function _renderBubble(msg, showOrigin) {
   const isSent = msg.direction === "outgoing";
   const wrap = document.createElement("div");
   wrap.className = `msg-wrap ${isSent ? "sent" : "received"}`;
+  if (msg.id) wrap.dataset.msgId = msg.id;
 
   // Show platform/thread context in search results
   if (showOrigin) {
@@ -185,12 +224,27 @@ function _renderBubble(msg, showOrigin) {
     wrap.appendChild(origin);
   }
 
+  // Avatar
+  const senderName = msg.sender || (isSent ? "Me" : "?");
+  const avatar = document.createElement("div");
+  avatar.className = "msg-avatar";
+  avatar.style.background = _avatarColor(senderName);
+  avatar.textContent = _initials(senderName);
+  wrap.appendChild(avatar);
+
+  const content = document.createElement("div");
+  content.className = "msg-content";
+
   const bubble = document.createElement("div");
   bubble.className = `msg-bubble ${isSent ? "msg-sent" : "msg-received"}`;
 
   const body = msg.body ? msg.body.trim() : "";
   if (body) {
-    bubble.textContent = body;
+    if (_activeQuery) {
+      bubble.innerHTML = _highlightText(body, _activeQuery);
+    } else {
+      bubble.textContent = body;
+    }
   } else {
     const em = document.createElement("em");
     em.className = "msg-empty-media";
@@ -204,8 +258,9 @@ function _renderBubble(msg, showOrigin) {
   const senderLabel = !isSent && msg.sender ? msg.sender + " · " : "";
   ts.textContent = `${senderLabel}${_fmtDate(msg.timestamp)}`;
 
-  wrap.appendChild(bubble);
-  wrap.appendChild(ts);
+  content.appendChild(bubble);
+  content.appendChild(ts);
+  wrap.appendChild(content);
   return wrap;
 }
 
@@ -225,12 +280,13 @@ function _onSearchInput(e) {
   clearTimeout(_searchTimer);
   const q = e.target.value.trim();
   if (!q) {
+    _activeQuery = "";
     _renderPlatformPills();
     _renderThreadList(_activePlatform ? _threads.filter(t => t.platform === _activePlatform) : _threads);
     _showEmptyMain();
     return;
   }
-  _searchTimer = setTimeout(() => _search(q), 400);
+  _searchTimer = setTimeout(() => { _activeQuery = q; _search(q); }, 400);
 }
 
 async function _search(q) {
@@ -263,8 +319,29 @@ async function _search(q) {
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
+let _activeQuery = "";
+
+const _avatarColors = ["#e06c75","#e5c07b","#98c379","#56b6c2","#61afef","#c678dd","#be5046","#d19a66"];
+function _avatarColor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  return _avatarColors[Math.abs(h) % _avatarColors.length];
+}
+function _initials(name) {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  return parts.length > 1 ? (parts[0][0] + parts[parts.length-1][0]) : name.slice(0, 2);
+}
+
 function _escHtml(s) {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function _highlightText(text, query) {
+  if (!query) return _escHtml(text);
+  const escaped = _escHtml(text);
+  const qEsc = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return escaped.replace(new RegExp(`(${qEsc})`, "gi"), "<mark>$1</mark>");
 }
 
 function _fmtDate(ts) {
