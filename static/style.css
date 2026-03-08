@@ -621,3 +621,16 @@ button[type="button"] { background: var(--surface2); color: var(--text); border:
 .insight-chip { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 14px; font-size: 0.78rem; display: flex; align-items: center; gap: 6px; }
 .insight-chip-value { font-weight: 700; color: var(--info); font-size: 0.95rem; }
 .insight-chip-label { color: var(--text-muted); }
+
+/* Date jump */
+.conv-date-jump { margin: 0 10px 6px; width: calc(100% - 20px); font-size: 0.78rem; padding: 5px 8px; }
+
+/* Sparkline */
+.stat-card-spark { grid-column: span 2; }
+.sparkline-svg { width: 100%; height: 40px; }
+
+/* Case grouping */
+.case-group { margin-bottom: 4px; }
+.case-group-header { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 0.78rem; color: var(--text-muted); list-style: none; }
+.case-group-header::-webkit-details-marker { display: none; }
+.case-group-count { font-size: 0.7rem; background: var(--surface2); padding: 1px 6px; border-radius: 8px; }

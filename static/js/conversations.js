@@ -22,6 +22,7 @@ export function initConversations(caseId) {
   _activePlatform = null;
   _loadThreads();
   _wireSearch();
+  _wireDateJump();
 }
 
 /**
@@ -265,6 +266,36 @@ function _renderBubble(msg, showOrigin) {
 }
 
 // ── Search ────────────────────────────────────────────────────────────────────
+
+function _wireDateJump() {
+  const dateInput = dom("conv-date-jump");
+  if (!dateInput) return;
+  dateInput.value = "";
+  const fresh = dateInput.cloneNode(true);
+  dateInput.parentNode.replaceChild(fresh, dateInput);
+  fresh.addEventListener("change", () => {
+    const dateStr = fresh.value;
+    if (!dateStr) return;
+    const target = new Date(dateStr);
+    const msgs = dom("conv-messages");
+    if (!msgs) return;
+    const bubbles = msgs.querySelectorAll(".msg-wrap");
+    for (const b of bubbles) {
+      const tsEl = b.querySelector(".msg-ts");
+      if (!tsEl) continue;
+      const ts = tsEl.textContent;
+      try {
+        const d = new Date(ts);
+        if (d >= target) {
+          b.scrollIntoView({ behavior: "smooth", block: "start" });
+          b.style.outline = "2px solid var(--info)";
+          setTimeout(() => b.style.outline = "", 2000);
+          return;
+        }
+      } catch (_) {}
+    }
+  });
+}
 
 function _wireSearch() {
   const input = dom("conv-search");
