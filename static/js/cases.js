@@ -345,6 +345,16 @@ formNewCase?.addEventListener("submit", async (e) => {
   }
 });
 
+// ── Sidebar toggle (mobile) ──────────────────────────────────────────────────
+const btnSidebarToggle = document.getElementById("btn-sidebar-toggle");
+const sidebar = document.getElementById("sidebar");
+if (btnSidebarToggle && sidebar) {
+  btnSidebarToggle.addEventListener("click", () => sidebar.classList.toggle("sidebar-open"));
+  sidebar.addEventListener("click", (e) => {
+    if (e.target.closest(".case-item")) sidebar.classList.remove("sidebar-open");
+  });
+}
+
 // ── Theme toggle ─────────────────────────────────────────────────────────────
 const btnTheme = document.getElementById("btn-theme");
 function _applyTheme(theme) {
