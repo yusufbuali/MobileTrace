@@ -40,9 +40,9 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); heig
 input[type="text"], select, textarea { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 8px 10px; border-radius: var(--radius); font-size: 0.85rem; width: 100%; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--info); }
 #case-list { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-.case-item { padding: 10px 12px; border-radius: var(--radius); cursor: pointer; border: 1px solid transparent; transition: background 0.15s; }
+.case-item { padding: 10px 12px; border-radius: var(--radius); cursor: pointer; border: 1px solid transparent; border-left: 3px solid transparent; transition: background 0.15s, border-color 0.15s; }
 .case-item:hover { background: var(--surface2); }
-.case-item.active { background: var(--surface2); border-color: var(--info); }
+.case-item.active { background: var(--surface2); border-color: var(--info); border-left: 3px solid var(--info); }
 .case-item .case-title { font-weight: 600; font-size: 0.9rem; }
 .case-item .case-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
 .status-badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
