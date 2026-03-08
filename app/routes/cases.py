@@ -125,7 +125,8 @@ def upload_evidence(case_id: str):
         ]
         if not any(str(resolved).startswith(str(a)) for a in allowed):
             return jsonify({"error": "path not in allowed evidence directories"}), 403
-        return _ingest_path(db, case_id, case_dir, source_path)
+        signal_key = body.get("signal_key", "").strip()
+        return _ingest_path(db, case_id, case_dir, source_path, signal_key=signal_key)
 
     # ── File upload mode ──────────────────────────────────────────────────────
     if "file" not in request.files:
@@ -137,10 +138,11 @@ def upload_evidence(case_id: str):
     safe_name = Path(f.filename).name
     dest_path = evidence_dir / safe_name
     f.save(dest_path)
-    return _ingest_path(db, case_id, case_dir, dest_path)
+    signal_key = request.form.get("signal_key", "").strip()
+    return _ingest_path(db, case_id, case_dir, dest_path, signal_key=signal_key)
 
 
-def _ingest_path(db, case_id: str, case_dir: Path, source_path: Path):
+def _ingest_path(db, case_id: str, case_dir: Path, source_path: Path, signal_key: str = ""):
     """Parse a file already on disk and store the result."""
     fmt = detect_format(source_path) or "unknown"
     ev_id = str(uuid.uuid4())
@@ -152,7 +154,7 @@ def _ingest_path(db, case_id: str, case_dir: Path, source_path: Path):
 
     try:
         extract_dir = case_dir / "extracted"
-        parsed = dispatch(source_path, extract_dir)
+        parsed = dispatch(source_path, extract_dir, signal_key=signal_key)
         _store_parsed(db, case_id, parsed)
         db.execute(
             "UPDATE evidence_files SET parse_status='done', parsed_at=datetime('now') WHERE id=?",

@@ -83,6 +83,8 @@ button[type="button"] { background: var(--surface2); color: var(--text); border:
 .ev-mode-btn { padding: 5px 14px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 0.8rem; cursor: pointer; }
 .ev-mode-btn.active { background: var(--info); color: #fff; border-color: var(--info); }
 .upload-form { display: flex; flex-direction: column; gap: 10px; }
+.ev-advanced { margin-top: 10px; }
+.ev-advanced summary { font-size: 0.8rem; color: var(--text-muted); cursor: pointer; user-select: none; }
 .ev-status { font-size: 0.8rem; color: var(--info); margin-top: 2px; }
 .evidence-list { display: flex; flex-direction: column; gap: 8px; }
 .evidence-item { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }

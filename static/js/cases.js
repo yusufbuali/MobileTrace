@@ -219,14 +219,16 @@ if (formPath) {
     e.preventDefault();
     if (!activeCaseId) return;
     const statusEl = document.getElementById("ev-path-status");
-    const path = new FormData(formPath).get("source_path")?.trim();
+    const fd = new FormData(formPath);
+    const path = fd.get("source_path")?.trim();
+    const signal_key = fd.get("signal_key")?.trim() || "";
     if (!path) return;
     if (statusEl) statusEl.textContent = "Parsing…";
     try {
       const res = await fetch(`/api/cases/${activeCaseId}/evidence`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source_path: path }),
+        body: JSON.stringify({ source_path: path, signal_key }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");

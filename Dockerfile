@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Python deps
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN apt-get update && apt-get install -y --no-install-recommends libsqlcipher-dev \
+    && pip install pysqlcipher3==1.2.0 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # App source
 COPY . .

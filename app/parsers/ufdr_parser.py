@@ -25,7 +25,7 @@ class UfdrParser(BaseParser):
     def can_handle(self, source_path: Path) -> bool:
         return source_path.suffix.lower() == ".ufdr"
 
-    def parse(self, source_path: Path, dest_dir: Path) -> ParsedCase:
+    def parse(self, source_path: Path, dest_dir: Path, **kwargs) -> ParsedCase:
         dest_dir.mkdir(parents=True, exist_ok=True)
         try:
             return self._parse_via_aift(source_path, dest_dir)

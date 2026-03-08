@@ -39,7 +39,7 @@ class OxygenParser(BaseParser):
         except Exception:
             return False
 
-    def parse(self, source_path: Path, dest_dir: Path) -> ParsedCase:
+    def parse(self, source_path: Path, dest_dir: Path, **kwargs) -> ParsedCase:
         dest_dir.mkdir(parents=True, exist_ok=True)
         try:
             conn = sqlite3.connect(source_path)

@@ -29,7 +29,7 @@ class XryParser(BaseParser):
                 return False
         return False
 
-    def parse(self, source_path: Path, dest_dir: Path) -> ParsedCase:
+    def parse(self, source_path: Path, dest_dir: Path, **kwargs) -> ParsedCase:
         dest_dir.mkdir(parents=True, exist_ok=True)
         work_dir = source_path
         if source_path.is_file() and source_path.suffix.lower() == ".zip":

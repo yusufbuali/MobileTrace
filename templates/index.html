@@ -135,6 +135,17 @@
               <label>Select evidence file (.ufdr, .zip, .ofb, .xrep)
                 <input name="file" type="file" accept=".ufdr,.xrep,.zip,.ofb" required />
               </label>
+              <details class="ev-advanced">
+                <summary>Advanced options</summary>
+                <label>Signal decryption key (optional)
+                  <input name="signal_key" type="password"
+                         placeholder="64-char hex key from Cellebrite / GrayKey"
+                         autocomplete="off" />
+                  <p class="muted" style="font-size:0.75rem;margin-top:2px">
+                    Only required if this device has Signal installed. Leave blank to skip.
+                  </p>
+                </label>
+              </details>
               <button type="submit" class="btn-primary">Upload &amp; Parse</button>
               <span id="ev-upload-status" class="ev-status"></span>
             </form>
@@ -149,6 +160,17 @@
                 <code>/opt/mobiletrace/evidence/&lt;filename&gt;</code>.
                 Use this for large files that are impractical to upload through the browser.
               </p>
+              <details class="ev-advanced">
+                <summary>Advanced options</summary>
+                <label>Signal decryption key (optional)
+                  <input name="signal_key" type="password"
+                         placeholder="64-char hex key from Cellebrite / GrayKey"
+                         autocomplete="off" />
+                  <p class="muted" style="font-size:0.75rem;margin-top:2px">
+                    Only required if this device has Signal installed. Leave blank to skip.
+                  </p>
+                </label>
+              </details>
               <button type="submit" class="btn-primary">Parse from Path</button>
               <span id="ev-path-status" class="ev-status"></span>
             </form>
