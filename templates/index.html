@@ -109,8 +109,8 @@
         <!-- Tabs -->
         <div class="tabs">
           <button class="tab-btn active" data-tab="tab-overview">Overview</button>
-          <button class="tab-btn" data-tab="tab-conversations">Conversations</button>
           <button class="tab-btn" data-tab="tab-evidence">Evidence</button>
+          <button class="tab-btn" data-tab="tab-conversations">Conversations</button>
           <button class="tab-btn" data-tab="tab-analysis">Analysis</button>
           <button class="tab-btn" data-tab="tab-chat">Chat</button>
         </div>
@@ -195,8 +195,56 @@
 
         <!-- Analysis tab -->
         <div id="tab-analysis" class="tab-panel">
-          <div id="analysis-progress" class="analysis-progress"></div>
-          <div id="analysis-results" class="analysis-results"></div>
+
+          <!-- ── Radar progress header (shown during + after analysis) ── -->
+          <div id="analysis-progress-header" class="aph-hidden">
+            <div class="aph-radar-wrap" aria-hidden="true">
+              <div class="aph-radar">
+                <div class="aph-radar-ring aph-radar-ring--outer"></div>
+                <div class="aph-radar-ring aph-radar-ring--inner"></div>
+                <div class="aph-radar-sweep"></div>
+                <div class="aph-radar-core"></div>
+              </div>
+            </div>
+            <div class="aph-body">
+              <div class="aph-top-row">
+                <span id="aph-label" class="aph-label">Initializing…</span>
+                <span id="aph-count" class="aph-count">0 / 0 artifacts</span>
+              </div>
+              <div class="aph-bar-track">
+                <div id="aph-bar-fill" class="aph-bar-fill"></div>
+              </div>
+              <div class="aph-bottom-row">
+                <span id="aph-current" class="aph-current"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── Phase 1: live stream cards (shown while analysis runs) ── -->
+          <div id="analysis-stream">
+            <div id="analysis-stream-list" class="analysis-stream-list"></div>
+          </div>
+
+          <!-- ── Phase 2: results view (shown after analysis completes) ── -->
+          <div id="analysis-results-view" class="aph-hidden">
+
+            <!-- Executive summary -->
+            <div class="aift-exec-summary">
+              <div class="aift-exec-title">Executive Summary</div>
+              <div id="analysis-exec-content" class="markdown-output"></div>
+            </div>
+
+            <!-- Per-artifact collapsible findings -->
+            <div class="aift-findings-header">Per-Artifact Findings</div>
+            <div id="analysis-findings"></div>
+
+            <!-- Action row -->
+            <div class="aift-action-row">
+              <button id="btn-view-report" class="btn-secondary">&#128196; View Full Report</button>
+              <button id="btn-rerun-analysis" class="btn-secondary">&#8635; Re-run Analysis</button>
+            </div>
+          </div>
+
         </div>
 
         <!-- Chat tab -->

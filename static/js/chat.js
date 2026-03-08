@@ -116,52 +116,84 @@ document.addEventListener("DOMContentLoaded", () => {
 
 // ── Analysis controls (re-used from dashboard) ───────────────────────────────
 
-export async function triggerAnalysis(caseId) {
-  const progressEl = dom("analysis-progress");
-  const resultsEl = dom("analysis-results");
-  if (!progressEl || !resultsEl) return;
+// ── Radar progress header ─────────────────────────────────────────────────────
 
-  progressEl.textContent = "Starting analysis…";
-  resultsEl.innerHTML = "";
+function _setRadar({ state = "running", label = "", count = 0, total = 0, current = "" } = {}) {
+  const header = dom("analysis-progress-header");
+  if (!header) return;
+  header.classList.remove("aph-hidden");
+  header.dataset.state = state;
+  const labelEl  = dom("aph-label");
+  const countEl  = dom("aph-count");
+  const fillEl   = dom("aph-bar-fill");
+  const currentEl = dom("aph-current");
+  if (labelEl)   labelEl.textContent  = label  || (state === "complete" ? "Analysis complete" : state === "failed" ? "Analysis failed" : "Initializing…");
+  if (countEl)   countEl.textContent  = `${count} / ${total} artifacts`;
+  if (fillEl)    fillEl.style.width   = total > 0 ? `${Math.round((count / total) * 100)}%` : "0%";
+  if (currentEl) currentEl.textContent = current ? `Currently: ${current}` : "";
+}
+
+export async function triggerAnalysis(caseId) {
+  // Reset UI: show radar, clear stream list, hide results view
+  _setRadar({ state: "running", label: "Starting analysis…", count: 0, total: 0 });
+  const streamList = dom("analysis-stream-list");
+  const resultsView = dom("analysis-results-view");
+  if (streamList) streamList.innerHTML = "";
+  if (resultsView) resultsView.classList.add("aph-hidden");
+  const streamEl = dom("analysis-stream");
+  if (streamEl) streamEl.style.display = "";
 
   try {
     await apiFetch(`/api/cases/${caseId}/analyze`, { method: "POST" });
   } catch (err) {
-    progressEl.textContent = `Failed to start: ${err.message}`;
+    _setRadar({ state: "failed", label: `Failed to start: ${err.message}`, count: 0, total: 0 });
     return;
   }
 
-  // Listen to SSE stream
   const es = new EventSource(`/api/cases/${caseId}/analysis/stream`);
-  const done = new Set();
+  const done = [];
 
   es.addEventListener("artifact_done", (e) => {
     const d = JSON.parse(e.data);
-    done.add(d.artifact_key);
-    progressEl.textContent = `Analysed: ${[...done].join(", ")}…`;
+    done.push(d.artifact_key);
+    _setRadar({
+      state: "running",
+      label: `Analyzing ${d.artifact_key}…`,
+      count: done.length,
+      total: done.length,   // total unknown until complete — update on complete
+      current: d.artifact_key,
+    });
+    // Add a live stream card
+    if (streamList) {
+      const card = document.createElement("div");
+      card.className = "analysis-stream-card";
+      const conf = _extractConfidence(d.result || "");
+      card.innerHTML = `
+        <div class="asc-header">
+          <span class="asc-title">${d.artifact_key}</span>
+          ${conf ? `<span class="confidence-inline ${_confidenceClass(conf)}">${conf}</span>` : ""}
+        </div>
+        <div class="markdown-output"></div>
+      `;
+      const mdEl = card.querySelector(".markdown-output");
+      if (mdEl) mdEl.appendChild(markdownToFragment(d.result || "(no result)"));
+      streamList.appendChild(card);
+    }
   });
 
   es.addEventListener("complete", () => {
-    progressEl.textContent = "Analysis complete.";
+    _setRadar({ state: "complete", label: "Analysis complete", count: done.length, total: done.length, current: "" });
     es.close();
+    if (streamEl) streamEl.style.display = "none";
     loadAnalysisResults(caseId);
   });
 
-  // Named "error" event from server (e.g. missing API key)
   es.addEventListener("error", (e) => {
+    let msg = "Analysis failed.";
     if (e.data) {
-      try {
-        const d = JSON.parse(e.data);
-        progressEl.textContent = `Analysis failed: ${d.message || "Unknown error"}`;
-        progressEl.style.color = "var(--danger)";
-      } catch (_) {
-        progressEl.textContent = "Analysis failed.";
-        progressEl.style.color = "var(--danger)";
-      }
-    } else {
-      // Native EventSource connection error
-      progressEl.textContent = "Connection lost.";
+      try { msg = JSON.parse(e.data).message || msg; } catch (_) {}
     }
+    _setRadar({ state: "failed", label: msg, count: done.length, total: done.length });
     es.close();
   });
 }

@@ -92,17 +92,206 @@ button[type="button"] { background: var(--surface2); color: var(--text); border:
 .evidence-item .ev-status-done { color: #3fb950; }
 .evidence-item .ev-status-error { color: var(--danger); }
 
-/* Analysis */
-.analysis-progress { margin-bottom: 12px; font-size: 0.85rem; color: var(--text-muted); }
-.analysis-results { display: flex; flex-direction: column; gap: 12px; }
-.analysis-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); }
-.analysis-card-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid var(--border); }
-.analysis-card-header h3 { font-size: 0.9rem; margin: 0; }
-.analysis-card-body { padding: 14px; font-size: 0.82rem; white-space: pre-wrap; line-height: 1.6; max-height: 400px; overflow-y: auto; }
-.analysis-card-body.markdown-output { white-space: normal; }
-.analysis-card-body.collapsed { display: none; }
-.analysis-card-chevron { font-size: 0.7rem; color: var(--text-muted); transition: transform 0.2s; }
-.analysis-card-header.open .analysis-card-chevron { transform: rotate(180deg); }
+/* ── Analysis: utility ────────────────────────────────────────── */
+.aph-hidden { display: none !important; }
+
+/* ── Analysis: radar progress header ──────────────────────────── */
+#analysis-progress-header {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--info);
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.3);
+  transition: border-color 0.4s, box-shadow 0.4s;
+}
+#analysis-progress-header[data-state="complete"] {
+  border-left-color: #22c55e;
+  box-shadow: 0 4px 18px rgba(34,197,94,0.12);
+}
+#analysis-progress-header[data-state="failed"] {
+  border-left-color: var(--danger);
+  box-shadow: 0 4px 18px rgba(248,81,73,0.12);
+}
+
+/* radar icon */
+.aph-radar-wrap { flex-shrink: 0; }
+.aph-radar { position: relative; width: 48px; height: 48px; }
+.aph-radar-ring {
+  position: absolute; border-radius: 50%;
+  border: 1.5px solid var(--info);
+}
+.aph-radar-ring--outer { inset: 0; opacity: 0.25; }
+.aph-radar-ring--inner { inset: 25%; opacity: 0.5; }
+.aph-radar-sweep {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 65%, rgba(88,166,255,0.55) 100%);
+  animation: aph-radar-spin 2s linear infinite;
+}
+@keyframes aph-radar-spin { to { transform: rotate(360deg); } }
+.aph-radar-core {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--info);
+  box-shadow: 0 0 7px var(--info), 0 0 14px rgba(88,166,255,0.35);
+}
+/* complete state */
+#analysis-progress-header[data-state="complete"] .aph-radar-sweep {
+  animation: none; background: none;
+}
+#analysis-progress-header[data-state="complete"] .aph-radar-core {
+  background: #22c55e;
+  box-shadow: 0 0 7px #22c55e, 0 0 18px rgba(34,197,94,0.35);
+  width: 20px; height: 20px;
+}
+#analysis-progress-header[data-state="complete"] .aph-radar-core::before {
+  content: '\2713';
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  color: #fff; font-size: 0.72rem; font-weight: 700;
+}
+/* failed state */
+#analysis-progress-header[data-state="failed"] .aph-radar-sweep { animation: none; background: none; }
+#analysis-progress-header[data-state="failed"] .aph-radar-core {
+  background: var(--danger);
+  box-shadow: 0 0 7px var(--danger);
+  width: 18px; height: 18px;
+}
+#analysis-progress-header[data-state="failed"] .aph-radar-core::before {
+  content: '\00d7';
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  color: #fff; font-size: 0.85rem; font-weight: 700;
+}
+
+/* body layout */
+.aph-body { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.aph-top-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; }
+.aph-label {
+  font-size: 0.95rem; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#analysis-progress-header[data-state="complete"] .aph-label { color: #22c55e; }
+#analysis-progress-header[data-state="failed"]   .aph-label { color: var(--danger); }
+.aph-count {
+  font-size: 0.75rem; color: var(--info);
+  background: rgba(88,166,255,0.1);
+  padding: 0.1rem 0.5rem; border-radius: 999px; white-space: nowrap; flex-shrink: 0;
+}
+#analysis-progress-header[data-state="complete"] .aph-count {
+  background: rgba(34,197,94,0.1); color: #22c55e;
+}
+.aph-bar-track {
+  width: 100%; height: 4px; background: var(--border);
+  border-radius: 999px; overflow: hidden; position: relative;
+}
+.aph-bar-fill {
+  height: 100%; width: 0%; background: var(--info);
+  border-radius: 999px;
+  transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+  position: relative; overflow: hidden;
+}
+.aph-bar-fill::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.22) 50%, transparent 100%);
+  animation: aph-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes aph-shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+#analysis-progress-header[data-state="complete"] .aph-bar-fill { background: #22c55e; }
+#analysis-progress-header[data-state="complete"] .aph-bar-fill::after { animation: none; }
+#analysis-progress-header[data-state="failed"] .aph-bar-fill { background: var(--danger); }
+#analysis-progress-header[data-state="failed"] .aph-bar-fill::after { animation: none; }
+.aph-bottom-row { min-height: 1rem; }
+.aph-current { font-size: 0.7rem; color: var(--text-muted); }
+
+/* ── Analysis: live stream cards ──────────────────────────────── */
+.analysis-stream-list { display: flex; flex-direction: column; gap: 10px; }
+.analysis-stream-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--info);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+.asc-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.asc-title { font-size: 0.9rem; font-weight: 600; flex: 1; }
+.asc-meta { font-size: 0.72rem; color: var(--text-muted); }
+
+/* ── Analysis: details/summary (results view) ─────────────────── */
+.aift-findings-header {
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-muted);
+  margin: 14px 0 8px;
+}
+#analysis-findings details {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+#analysis-findings details > summary {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  font-size: 0.82rem; font-weight: 600;
+  color: var(--text-muted);
+  user-select: none;
+  transition: color 0.15s, background 0.15s;
+}
+#analysis-findings details > summary::-webkit-details-marker { display: none; }
+#analysis-findings details > summary::before {
+  content: '▸';
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  transition: transform 0.2s, color 0.15s;
+  flex-shrink: 0;
+}
+#analysis-findings details[open] > summary::before {
+  transform: rotate(90deg);
+  color: var(--info);
+}
+#analysis-findings details[open] > summary {
+  color: var(--info);
+  background: rgba(88,166,255,0.05);
+  border-bottom: 1px solid var(--border);
+}
+#analysis-findings details > div {
+  padding: 14px;
+  font-size: 0.82rem;
+}
+
+/* ── Analysis: executive summary card ────────────────────────── */
+.aift-exec-summary {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--info);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.aift-exec-title {
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--info);
+  margin-bottom: 10px;
+}
+
+/* ── Analysis: action row ─────────────────────────────────────── */
+.aift-action-row {
+  display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;
+}
 
 /* Chat */
 .chat-layout { display: grid; grid-template-columns: 1fr 260px; gap: 16px; height: calc(100vh - 240px); }
