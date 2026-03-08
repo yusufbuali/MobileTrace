@@ -409,7 +409,7 @@
 
           {# ── Key findings ── #}
           {% set kf = p.get('key_findings') %}
-          {% if kf %}
+          {% if kf and kf is mapping %}
           <div class="section-label" style="margin-top:14px;margin-bottom:6px">Key Findings</div>
           {% set top_convs = kf.get('top_significant_conversations', []) %}
           {% for tc in top_convs %}
@@ -424,7 +424,7 @@
             {% endfor %}
           </div>
           {% endfor %}
-          {% set kf_note = kf.get('note') %}
+          {% set kf_note = kf.get('note') if kf is mapping else none %}
           {% if kf_note %}
           <div class="findings-block"><p>{{ kf_note }}</p></div>
           {% endif %}
