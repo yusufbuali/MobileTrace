@@ -488,6 +488,60 @@ export async function loadAnalysisResults(caseId) {
   if (reportBtn) {
     reportBtn.onclick = () => window.open(`/api/cases/${caseId}/report`, "_blank");
   }
+  const exportBtn = dom("btn-export-analysis");
+  if (exportBtn) {
+    exportBtn.onclick = () => {
+      let md = "# MobileTrace Analysis Report\n\n";
+      rows.forEach(r => {
+        const p = r.result_parsed ? _normalizeAnalysis(r.result_parsed) : null;
+        md += `## ${_titleCase(r.artifact_key)}\n\n`;
+        if (p) {
+          const rsum = p.risk_level_summary || p.summary || "";
+          if (rsum) md += `**Risk Summary:** ${rsum}\n\n`;
+          const cra = Array.isArray(p.conversation_risk_assessment) ? p.conversation_risk_assessment : [];
+          if (cra.length) {
+            md += "### Conversation Risk Assessment\n\n";
+            md += "| Thread | Risk | Score | Messages | Sent | Received |\n";
+            md += "|--------|------|-------|----------|------|----------|\n";
+            cra.forEach(t => {
+              md += `| ${t.thread_id || "—"} | ${t.risk_level || "—"} | ${t.risk_score || 0}/10 | ${t.messages || 0} | ${t.sent || 0} | ${t.received || 0} |\n`;
+            });
+            md += "\n";
+            cra.forEach(t => {
+              if ((t.key_indicators || []).length) {
+                md += `**${t.thread_id || "—"} — Key Indicators:**\n`;
+                t.key_indicators.forEach(ki => { md += `- ${ki}\n`; });
+                md += "\n";
+              }
+            });
+          }
+          const kf = p.key_findings;
+          if (kf) {
+            md += "### Key Findings\n\n";
+            (kf.top_significant_conversations || []).forEach(tc => {
+              md += `**${tc.thread_id || ""}:** ${tc.summary || ""}\n\n`;
+              (tc.key_messages || []).forEach(km => {
+                md += `> [${km.timestamp || ""}] (${km.direction || ""}): ${km.body || ""}\n\n`;
+              });
+            });
+            if (kf.note) md += `*Note: ${kf.note}*\n\n`;
+          }
+        } else if (r.result) {
+          md += r.result + "\n\n";
+        }
+        md += "---\n\n";
+      });
+
+      const blob = new Blob([md], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `analysis-${caseId}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+  }
+
   const rerunBtn = dom("btn-rerun-analysis");
   if (rerunBtn) {
     rerunBtn.onclick = () => {
