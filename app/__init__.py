@@ -28,6 +28,8 @@ def create_app(config_path: str = "config.yaml", testing: bool = False) -> Flask
 
     app.config["MT_CONFIG"] = cfg
     app.config["MT_CONFIG_PATH"] = config_path
+    app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # never cache static files in dev
+    app.config["TEMPLATES_AUTO_RELOAD"] = True   # always re-read templates from disk
 
     from .report_utils import format_markdown_block
     app.jinja_env.filters["format_markdown_block"] = format_markdown_block

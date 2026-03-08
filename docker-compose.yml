@@ -8,7 +8,14 @@ services:
       - "5001:5001"
     volumes:
       - ./data:/opt/mobiletrace/data
+      - ./config.yaml:/opt/mobiletrace/config.yaml
       - ./evidence:/opt/mobiletrace/evidence:ro
+      # Live-mount source so changes take effect without rebuild
+      - ./app:/opt/mobiletrace/app
+      - ./templates:/opt/mobiletrace/templates
+      - ./static:/opt/mobiletrace/static
+      # AIFT shared evidence folder (large forensic images)
+      - ../AIFT-DEPLOYMENT-2/evidence:/opt/aift/evidence:ro
       # Shared AIFT mobile modules (read-only)
       - ../AIFT-DEPLOYMENT-2/app/mobile_ingest.py:/aift_mobile/mobile_ingest.py:ro
       - ../AIFT-DEPLOYMENT-2/app/mobile_forensics.py:/aift_mobile/mobile_forensics.py:ro
@@ -17,4 +24,5 @@ services:
       - MOBILETRACE_DB_PATH=/opt/mobiletrace/data/mobiletrace.db
       - MOBILETRACE_CASES_DIR=/opt/mobiletrace/data/cases
       - FLASK_ENV=development
+      - FLASK_DEBUG=1
     restart: unless-stopped
