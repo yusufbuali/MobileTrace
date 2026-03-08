@@ -199,68 +199,87 @@ export async function triggerAnalysis(caseId) {
 }
 
 export async function loadAnalysisResults(caseId) {
-  const resultsEl = dom("analysis-results");
-  if (!resultsEl) return;
+  const resultsView = dom("analysis-results-view");
+  const execContent = dom("analysis-exec-content");
+  const findingsEl  = dom("analysis-findings");
+  if (!resultsView || !execContent || !findingsEl) return;
+
+  let rows;
   try {
-    const rows = await apiFetch(`/api/cases/${caseId}/analysis`);
-    if (!rows.length) {
-      resultsEl.innerHTML = '<p class="muted">No analysis results yet. Click "Run Analysis" to start.</p>';
-      return;
-    }
-    resultsEl.innerHTML = "";
-    rows.forEach(r => {
-      const card = document.createElement("div");
-      card.className = "analysis-card";
-
-      // Use server-parsed result if available, otherwise try client-side parse
-      let parsed = r.result_parsed || null;
-      if (!parsed) {
-        try { parsed = JSON.parse((r.result || "").trim()); } catch (_) {}
-      }
-
-      const conf = parsed
-        ? _jsonRiskLevel(parsed)
-        : _extractConfidence(r.result || "");
-
-      const header = document.createElement("div");
-      header.className = "analysis-card-header open";
-      header.addEventListener("click", () => {
-        body.classList.toggle("collapsed");
-        header.classList.toggle("open");
-      });
-
-      const title = document.createElement("h3");
-      title.textContent = r.artifact_key;
-
-      const meta = document.createElement("span");
-      meta.style.cssText = "font-size:0.75rem;color:var(--text-muted);display:flex;align-items:center;gap:6px";
-      meta.innerHTML = `${conf ? `<span class="confidence-inline ${_confidenceClass(conf)}">${conf}</span>` : ""}${r.provider || ""} · ${r.created_at ? r.created_at.slice(0, 16) : ""}`;
-
-      const chevron = document.createElement("span");
-      chevron.className = "analysis-card-chevron";
-      chevron.textContent = "▾";
-
-      header.appendChild(title);
-      header.appendChild(meta);
-      header.appendChild(chevron);
-
-      const body = document.createElement("div");
-      body.className = "analysis-card-body";
-
-      if (parsed) {
-        _renderJsonAnalysis(parsed, body);
-      } else {
-        body.classList.add("markdown-output");
-        body.appendChild(markdownToFragment(r.result || "(no result)"));
-      }
-
-      card.appendChild(header);
-      card.appendChild(body);
-      resultsEl.appendChild(card);
-    });
+    rows = await apiFetch(`/api/cases/${caseId}/analysis`);
   } catch (_) {
-    resultsEl.innerHTML = '<p class="muted">Could not load analysis results.</p>';
+    return;
   }
+  if (!rows || !rows.length) return;
+
+  // ── Executive Summary ──────────────────────────────────────────
+  execContent.innerHTML = "";
+  const summaryParts = rows.map(r => {
+    const p = r.result_parsed || null;
+    const rsum = p && (p.risk_level_summary || p.executive_summary || p.summary);
+    if (rsum) return `**${_titleCase(r.artifact_key)}:** ${rsum}`;
+    if (!p && r.result) return `**${_titleCase(r.artifact_key)}:** ${String(r.result).slice(0, 200).trim()}`;
+    return null;
+  }).filter(Boolean);
+  execContent.appendChild(
+    markdownToFragment(summaryParts.length ? summaryParts.join("\n\n") : "_No summary available._")
+  );
+
+  // ── Per-Artifact Details ───────────────────────────────────────
+  findingsEl.innerHTML = "";
+  rows.forEach((r, i) => {
+    const p = r.result_parsed || null;
+    const conf = p ? _jsonRiskLevel(p) : _extractConfidence(r.result || "");
+
+    const details = document.createElement("details");
+    if (i === 0) details.open = true;
+
+    const summary = document.createElement("summary");
+    summary.innerHTML = `
+      <span style="flex:1">${_titleCase(r.artifact_key)}</span>
+      ${conf ? `<span class="confidence-inline ${_confidenceClass(conf)}">${conf}</span>` : ""}
+      <span class="asc-meta" style="margin-left:6px">${r.provider || ""}</span>
+    `;
+    details.appendChild(summary);
+
+    const body = document.createElement("div");
+    if (p) {
+      _renderJsonAnalysis(p, body);
+    } else {
+      body.classList.add("markdown-output");
+      body.appendChild(markdownToFragment(r.result || "(no result)"));
+    }
+    details.appendChild(body);
+    findingsEl.appendChild(details);
+  });
+
+  // ── Action buttons ─────────────────────────────────────────────
+  const reportBtn = dom("btn-view-report");
+  if (reportBtn) {
+    reportBtn.onclick = () => window.open(`/api/cases/${caseId}/report`, "_blank");
+  }
+  const rerunBtn = dom("btn-rerun-analysis");
+  if (rerunBtn) {
+    rerunBtn.onclick = () => {
+      resultsView.classList.add("aph-hidden");
+      const header = dom("analysis-progress-header");
+      if (header) header.classList.add("aph-hidden");
+      triggerAnalysis(caseId);
+    };
+  }
+
+  // Show the results view
+  resultsView.classList.remove("aph-hidden");
+
+  // Show radar in complete state if it's currently hidden (page reload case)
+  const header = dom("analysis-progress-header");
+  if (header && header.classList.contains("aph-hidden")) {
+    _setRadar({ state: "complete", label: "Analysis complete", count: rows.length, total: rows.length });
+  }
+}
+
+function _titleCase(str) {
+  return String(str || "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
 function _renderJsonAnalysis(p, container) {
