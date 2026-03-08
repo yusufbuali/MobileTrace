@@ -210,7 +210,11 @@ export async function loadAnalysisResults(caseId) {
   } catch (_) {
     return;
   }
-  if (!rows || !rows.length) return;
+  if (!rows || !rows.length) {
+    const streamList = dom("analysis-stream-list");
+    if (streamList) streamList.innerHTML = '<p class="muted" style="padding:12px 0">No analysis results yet. Click <strong>Run Analysis</strong> above to start.</p>';
+    return;
+  }
 
   // ── Executive Summary ──────────────────────────────────────────
   execContent.innerHTML = "";
