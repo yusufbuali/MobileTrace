@@ -26,18 +26,35 @@ function statusBadge(status) {
 // ── Case list ────────────────────────────────────────────────────────────────
 
 function renderCases(cases) {
-  caseList.innerHTML = cases.map(c => `
-    <div class="case-item ${c.id === activeCaseId ? "active" : ""}" 
-         data-id="${c.id}" 
-         role="button" 
-         aria-pressed="${c.id === activeCaseId ? "true" : "false"}"
-         tabindex="0">
-      <div class="case-title">${c.title}</div>
-      <div class="case-meta">
-        ${c.officer || "&mdash;"} &middot; ${statusBadge(c.status)}
-      </div>
-    </div>
+  // Group by status
+  const groups = {};
+  const statusOrder = ["open", "in_review", "on_hold", "closed"];
+  cases.forEach(c => {
+    const s = c.status || "open";
+    if (!groups[s]) groups[s] = [];
+    groups[s].push(c);
+  });
+
+  const sortedStatuses = statusOrder.filter(s => groups[s]?.length);
+  // Add any statuses not in the predefined order
+  Object.keys(groups).forEach(s => { if (!sortedStatuses.includes(s)) sortedStatuses.push(s); });
+
+  caseList.innerHTML = sortedStatuses.map(status => `
+    <details class="case-group" open>
+      <summary class="case-group-header">${statusBadge(status)} <span class="case-group-count">${groups[status].length}</span></summary>
+      ${groups[status].map(c => `
+        <div class="case-item ${c.id === activeCaseId ? "active" : ""}"
+             data-id="${c.id}"
+             role="button"
+             aria-pressed="${c.id === activeCaseId ? "true" : "false"}"
+             tabindex="0">
+          <div class="case-title">${c.title}</div>
+          <div class="case-meta">${c.officer || "&mdash;"}</div>
+        </div>
+      `).join("")}
+    </details>
   `).join("");
+
   caseList.querySelectorAll(".case-item").forEach(el => {
     el.addEventListener("click", () => openCase(el.dataset.id));
     el.addEventListener("keydown", (e) => {
@@ -167,7 +184,47 @@ async function _loadStats(caseId) {
         <div class="stat-value">${s.value}</div>
         <div class="stat-label">${s.label}</div>
       </div>`).join("");
+    // Sparkline — message volume by day
+    _loadSparkline(caseId);
   } catch (_) { /* stats not critical */ }
+}
+
+async function _loadSparkline(caseId) {
+  const el = document.getElementById("dash-stats");
+  if (!el) return;
+  try {
+    const rows = await apiFetch(`/api/cases/${caseId}/messages?limit=500`);
+    if (!rows.length) return;
+    // Group by date
+    const counts = {};
+    rows.forEach(m => {
+      if (!m.timestamp) return;
+      const day = m.timestamp.slice(0, 10);
+      counts[day] = (counts[day] || 0) + 1;
+    });
+    const days = Object.keys(counts).sort();
+    if (days.length < 2) return;
+    const values = days.map(d => counts[d]);
+    const max = Math.max(...values);
+
+    // Generate SVG polyline
+    const w = 200, h = 40, pad = 2;
+    const points = values.map((v, i) => {
+      const x = pad + (i / (values.length - 1)) * (w - 2 * pad);
+      const y = pad + (1 - v / max) * (h - 2 * pad);
+      return `${x},${y}`;
+    }).join(" ");
+
+    const sparkCard = document.createElement("div");
+    sparkCard.className = "stat-card stat-card-spark";
+    sparkCard.innerHTML = `
+      <div class="stat-label" style="margin-bottom:6px">Activity (${days[0]} — ${days[days.length - 1]})</div>
+      <svg class="sparkline-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+        <polyline points="${points}" fill="none" stroke="var(--info)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    `;
+    el.appendChild(sparkCard);
+  } catch (_) { /* sparkline not critical */ }
 }
 
 function _formatIcon(format) {
