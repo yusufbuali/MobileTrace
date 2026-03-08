@@ -15,7 +15,7 @@
         <span class="brand-name">MobileTrace</span>
       </div>
       <div class="sidebar-controls">
-        <input id="search-cases" type="text" placeholder="Search cases&hellip;" />
+        <input id="search-cases" type="text" placeholder="Search cases&hellip;" aria-label="Search cases" />
         <select id="filter-status">
           <option value="">All statuses</option>
           <option value="open">Open</option>
@@ -24,7 +24,7 @@
           <option value="closed">Closed</option>
         </select>
       </div>
-      <div id="case-list"></div>
+      <nav id="case-list" aria-label="Case list"></nav>
       <button id="btn-new-case" class="btn-primary">+ New Case</button>
       <div class="sidebar-bottom-row">
         <button id="btn-theme" class="btn-gear" title="Toggle light/dark mode">&#9790; Theme</button>
@@ -34,7 +34,7 @@
 
     <!-- Settings modal -->
     <div id="settings-modal" class="modal-overlay" style="display:none">
-      <div class="modal-box">
+      <div class="modal-box" role="dialog" aria-modal="true" aria-label="AI Provider Settings">
         <div class="modal-header">
           <h3>AI Provider Settings</h3>
           <button id="btn-settings-close" class="modal-close">&times;</button>
@@ -111,22 +111,22 @@
         </div>
 
         <!-- Tabs -->
-        <div class="tabs">
-          <button class="tab-btn active" data-tab="tab-overview">Overview</button>
-          <button class="tab-btn" data-tab="tab-evidence">Evidence</button>
-          <button class="tab-btn" data-tab="tab-conversations">Conversations</button>
-          <button class="tab-btn" data-tab="tab-analysis">Analysis</button>
-          <button class="tab-btn" data-tab="tab-chat">Chat</button>
+        <div class="tabs" role="tablist" aria-label="Case sections">
+          <button class="tab-btn active" data-tab="tab-overview" role="tab" aria-selected="true" aria-controls="tab-overview">Overview</button>
+          <button class="tab-btn" data-tab="tab-evidence" role="tab" aria-selected="false" aria-controls="tab-evidence">Evidence</button>
+          <button class="tab-btn" data-tab="tab-conversations" role="tab" aria-selected="false" aria-controls="tab-conversations">Conversations</button>
+          <button class="tab-btn" data-tab="tab-analysis" role="tab" aria-selected="false" aria-controls="tab-analysis">Analysis</button>
+          <button class="tab-btn" data-tab="tab-chat" role="tab" aria-selected="false" aria-controls="tab-chat">Chat</button>
         </div>
 
         <!-- Overview tab -->
-        <div id="tab-overview" class="tab-panel active">
+        <div id="tab-overview" class="tab-panel active" role="tabpanel">
           <div class="stats-grid" id="dash-stats"></div>
           <div id="dash-device-info" class="device-info-block"></div>
         </div>
 
         <!-- Evidence tab -->
-        <div id="tab-evidence" class="tab-panel">
+        <div id="tab-evidence" class="tab-panel" role="tabpanel">
           <div class="evidence-upload-area">
             <div class="ev-drop-hint">Drop evidence file here</div>
             <!-- Mode toggle -->
@@ -137,8 +137,8 @@
 
             <!-- Browser upload -->
             <form id="form-upload-evidence" enctype="multipart/form-data" class="upload-form ev-panel" data-panel="upload">
-              <label>Select evidence file (.ufdr, .zip, .ofb, .xrep)
-                <input name="file" type="file" accept=".ufdr,.xrep,.zip,.ofb" required />
+              <label>Select evidence file (.ufdr, .zip, .ofb, .xrep, .tar)
+                <input name="file" type="file" accept=".ufdr,.xrep,.zip,.ofb,.tar" required />
               </label>
               <details class="ev-advanced">
                 <summary>Advanced options</summary>
@@ -184,14 +184,31 @@
               <span id="ev-path-status" class="ev-status"></span>
             </form>
           </div>
+
+          <details class="ev-supported-formats">
+            <summary>Supported Formats</summary>
+            <table class="sf-table">
+              <thead>
+                <tr><th>Format</th><th>Extension</th><th>Source</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Cellebrite UFDR</td><td><code>.ufdr</code></td><td>Cellebrite</td></tr>
+                <tr><td>MSAB XRY</td><td><code>.xrep</code></td><td>MSAB</td></tr>
+                <tr><td>Oxygen Forensics</td><td><code>.ofb</code></td><td>Oxygen Detective</td></tr>
+                <tr><td>iOS Filesystem Dump</td><td><code>.tar</code></td><td>checkra1n / GrayKey</td></tr>
+                <tr><td>Android Data Dump</td><td><code>.tar</code> / <code>.zip</code></td><td>Magnet Acquire / ADB</td></tr>
+              </tbody>
+            </table>
+          </details>
+
           <div id="evidence-list" class="evidence-list"></div>
         </div>
 
         <!-- Conversations tab -->
-        <div id="tab-conversations" class="tab-panel">
+        <div id="tab-conversations" class="tab-panel" role="tabpanel">
           <div class="conv-layout">
             <div class="conv-sidebar">
-              <input id="conv-search" type="text" placeholder="Search messages&hellip;" />
+              <input id="conv-search" type="text" placeholder="Search messages&hellip;" aria-label="Search messages" />
               <div id="conv-platform-pills" class="platform-pills"></div>
               <div id="conv-thread-list" class="conv-thread-list"></div>
             </div>
@@ -203,7 +220,7 @@
         </div>
 
         <!-- Analysis tab -->
-        <div id="tab-analysis" class="tab-panel">
+        <div id="tab-analysis" class="tab-panel" role="tabpanel">
 
           <!-- ── Radar progress header (shown during + after analysis) ── -->
           <div id="analysis-progress-header" class="aph-hidden">
@@ -257,7 +274,7 @@
         </div>
 
         <!-- Chat tab -->
-        <div id="tab-chat" class="tab-panel">
+        <div id="tab-chat" class="tab-panel" role="tabpanel">
           <div class="chat-layout">
             <div class="chat-main">
               <div id="chat-messages" class="chat-messages"></div>
