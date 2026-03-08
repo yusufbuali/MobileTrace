@@ -27,6 +27,10 @@ def create_app(config_path: str = "config.yaml", testing: bool = False) -> Flask
         cfg = load_config(config_path)
 
     app.config["MT_CONFIG"] = cfg
+    app.config["MT_CONFIG_PATH"] = config_path
+
+    from .report_utils import format_markdown_block
+    app.jinja_env.filters["format_markdown_block"] = format_markdown_block
 
     # Ensure data dirs exist
     db_path = Path(cfg["server"]["database_path"])
@@ -45,10 +49,12 @@ def create_app(config_path: str = "config.yaml", testing: bool = False) -> Flask
     from .routes.analysis import bp_analysis
     from .routes.chat import bp_chat
     from .routes.reports import bp_reports
+    from .routes.settings import bp_settings
     app.register_blueprint(bp_cases)
     app.register_blueprint(bp_analysis)
     app.register_blueprint(bp_chat)
     app.register_blueprint(bp_reports)
+    app.register_blueprint(bp_settings)
 
     @app.route("/api/health")
     def health():

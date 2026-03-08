@@ -175,6 +175,52 @@
     /* ── RTL helpers ──────────────────────────────────────────── */
     .evidence-hash, .ip-address, code, pre, .mono { direction: ltr; unicode-bidi: embed; text-align: left; font-family: 'Consolas', monospace; }
 
+    /* ── Markdown output ──────────────────────────────────────── */
+    .markdown-output { font-size: 0.85rem; line-height: 1.65; }
+    .markdown-output h1, .markdown-output h2, .markdown-output h3,
+    .markdown-output h4, .markdown-output h5, .markdown-output h6 { margin: 10px 0 6px; color: #f4f8ff; }
+    .markdown-output p { margin: 0 0 8px; }
+    .markdown-output ul, .markdown-output ol { margin: 0 0 8px; padding-left: 20px; }
+    .markdown-output li { margin: 0 0 3px; }
+    .markdown-output code { font-family: 'Consolas', monospace; font-size: 0.88em;
+      background: rgba(11,16,24,0.75); border: 1px solid rgba(159,177,199,0.25);
+      border-radius: 4px; padding: 1px 5px; }
+    .markdown-output pre { margin: 0 0 8px; padding: 10px; overflow-x: auto;
+      border: 1px solid rgba(159,177,199,0.25); border-radius: 8px;
+      background: rgba(11,16,24,0.85); }
+    .markdown-output pre code { border: 0; padding: 0; background: transparent; }
+    .markdown-output table { width: 100%; border-collapse: collapse; margin: 0 0 8px; }
+    .markdown-output th, .markdown-output td { border: 1px solid rgba(159,177,199,0.25);
+      padding: 7px 9px; text-align: left; vertical-align: top; }
+    .markdown-output th { background: rgba(255,255,255,0.04); color: #e9f0ff; font-weight: 600; }
+    .confidence-inline { padding: 1px 5px; border-radius: 4px; font-weight: 700;
+      font-size: 0.88em; margin: 0 2px; }
+    .confidence-critical { color: #fff1f0; background: #ef4444; }
+    .confidence-high { color: #2f0d04; background: #ffb38f; }
+    .confidence-medium { color: #302600; background: #ffe47a; }
+    .confidence-low { color: #021a35; background: #9ec9ff; }
+    .confidence-unknown { color: #132234; background: #cbd5e1; }
+
+    /* ── Chat bubbles ─────────────────────────────────────────── */
+    .chat-thread { border: 1px solid rgba(159,177,199,0.2); border-radius:10px;
+      background: var(--panel-alt); margin-bottom:10px; overflow:hidden; }
+    .chat-thread-header { display:flex; justify-content:space-between; align-items:center;
+      padding:10px 14px; background:rgba(255,255,255,0.02);
+      border-bottom:1px solid rgba(159,177,199,0.15); }
+    .chat-title { font-weight:600; font-size:0.92rem; }
+    .chat-meta { font-size:0.78rem; color:var(--muted); }
+    .chat-messages { padding:10px 14px; display:flex; flex-direction:column; gap:6px; }
+    .msg-bubble { max-width:72%; padding:7px 12px; border-radius:10px;
+      font-size:0.85rem; line-height:1.45; word-break:break-word; }
+    .msg-sent { align-self:flex-end; background:#1a3a5c;
+      border:1px solid rgba(87,179,255,0.25); border-bottom-right-radius:3px; }
+    .msg-received { align-self:flex-start; background:rgba(255,255,255,0.04);
+      border:1px solid rgba(159,177,199,0.18); border-bottom-left-radius:3px; }
+    .msg-sender { font-weight:600; font-size:0.75rem; margin-bottom:2px; color:var(--accent); }
+    .msg-time { font-size:0.7rem; color:var(--muted); margin-top:3px; }
+    .platform-section-title { font-size:0.75rem; font-weight:700; text-transform:uppercase;
+      letter-spacing:0.06em; color:var(--muted); margin:14px 0 8px; }
+
     /* ── Print ────────────────────────────────────────────────── */
     @media print {
       body { padding: 12px; font-size: 11px; background: #fff; color: #000; }
@@ -220,6 +266,80 @@
     </table>
   </div>
 
+  <!-- ── Evidence Files ──────────────────────────────────────────────────────── -->
+  {% if evidence_files %}
+  <div class="panel">
+    <h2>Evidence Files</h2>
+    <table class="data-table">
+      <thead>
+        <tr><th>Format</th><th>Source</th><th>Status</th><th>Parsed At</th></tr>
+      </thead>
+      <tbody>
+      {% for ev in evidence_files %}
+        <tr>
+          <td><span class="badge badge-{{ ev.format or 'unknown' }}">{{ ev.format or '—' }}</span></td>
+          <td class="mono" style="word-break:break-all;font-size:0.75rem">{{ ev.source_path or '—' }}</td>
+          <td>
+            {% if ev.parse_status == 'done' %}
+              <span class="badge" style="background:#0d2e1b;color:#22c55e">done</span>
+            {% elif ev.parse_status == 'error' %}
+              <span class="badge" style="background:#2d0a0a;color:#f04438" title="{{ ev.parse_error or '' }}">error</span>
+            {% else %}
+              <span class="badge" style="background:#1a1f2e;color:#9fb1c7">{{ ev.parse_status or '—' }}</span>
+            {% endif %}
+          </td>
+          <td class="mono">{{ ev.parsed_at or '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- ── Executive Summary ───────────────────────────────────────────────────── -->
+  {% if executive_summary %}
+  <div class="panel">
+    <h2>Executive Summary</h2>
+    <div class="panel-alt markdown-output">
+      {{ executive_summary | format_markdown_block | safe }}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── Conversation Excerpts ──────────────────────────────────────────────── -->
+  {% if conversation_excerpts %}
+  <div class="panel">
+    <h2>Conversation Excerpts</h2>
+    <p style="color:var(--muted);font-size:0.82rem;margin:0 0 14px">
+      Top 5 threads per platform, last 25 messages each.
+    </p>
+    {% for platform_block in conversation_excerpts %}
+      <div class="platform-section-title">
+        <span class="badge badge-{{ platform_block.platform }}">{{ platform_block.platform }}</span>
+      </div>
+      {% for thread in platform_block.threads %}
+        <details class="chat-thread" {% if loop.first %}open{% endif %}>
+          <summary class="chat-thread-header">
+            <span class="chat-title mono" style="font-size:0.82rem">{{ thread.thread_id }}</span>
+            <span class="chat-meta">{{ thread.message_count }} messages total</span>
+          </summary>
+          <div class="chat-messages">
+            {% for msg in thread.messages %}
+              <div class="msg-bubble {{ 'msg-sent' if msg.direction == 'outgoing' else 'msg-received' }}">
+                {% if msg.direction == 'incoming' and msg.sender and msg.sender != 'device' %}
+                  <div class="msg-sender">{{ msg.sender }}</div>
+                {% endif %}
+                {{ msg.body or '[no body]' }}
+                <div class="msg-time">{{ msg.timestamp or '' }}</div>
+              </div>
+            {% endfor %}
+          </div>
+        </details>
+      {% endfor %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
   <!-- ── AI Analysis Results ────────────────────────────────────────────────── -->
   {% if analysis %}
   <div class="panel">
@@ -230,17 +350,20 @@
       <summary>
         <span class="summary-left">
           <strong>{{ a.artifact_key | title }}</strong>
-          {% if p %}
-            {% set lvl = p.get('risk_level_summary', p.get('risk_level', p.get('confidence_level', ''))) %}
-            {% set lvl_word = lvl.split()[0].upper() if lvl else '' %}
-            {% if lvl_word in ['HIGH','CRITICAL','MEDIUM','LOW'] %}
-            <span class="risk-badge risk-{{ lvl_word }}">{{ lvl_word }}</span>
-            {% endif %}
+          {% if a.confidence_label and a.confidence_label != 'UNSPECIFIED' %}
+          <span class="risk-badge risk-{{ a.confidence_label }}">{{ a.confidence_label }}</span>
           {% endif %}
         </span>
         <span class="summary-provider">{{ a.provider or '' }} · {{ a.created_at[:16] if a.created_at else '' }}</span>
       </summary>
       <div class="analysis-body">
+        <div style="display:flex;gap:16px;margin-bottom:12px;font-size:0.78rem;color:var(--muted)">
+          <span>&#128203; <strong style="color:var(--text)">{{ a.record_count }}</strong> records</span>
+          {% if a.time_start != 'N/A' %}
+          <span>&#128197; {{ a.time_start[:10] if a.time_start|length > 10 else a.time_start }}
+            &rarr; {{ a.time_end[:10] if a.time_end|length > 10 else a.time_end }}</span>
+          {% endif %}
+        </div>
         {% if p %}
           {# ── Risk summary banner ── #}
           {% set rsum = p.get('risk_level_summary') %}
@@ -329,8 +452,9 @@
           {% endfor %}
 
         {% else %}
-          {# ── Fallback: raw text ── #}
-          <pre class="json-raw">{{ a.result }}</pre>
+          <div class="panel-alt markdown-output" style="padding:12px 14px">
+            {{ a.result | format_markdown_block | safe }}
+          </div>
         {% endif %}
       </div>
     </details>
