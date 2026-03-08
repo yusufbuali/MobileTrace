@@ -75,6 +75,61 @@ def trigger_analysis(case_id: str):
     return jsonify({"case_id": case_id, "status": "started"}), 202
 
 
+@bp_analysis.get("/cases/<case_id>/analysis/preview")
+def analysis_preview(case_id: str):
+    """Return per-artifact data counts so the UI can show what will be analyzed."""
+    db = get_db()
+    row = db.execute("SELECT id FROM cases WHERE id=?", (case_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "case not found"}), 404
+
+    # Evidence files
+    evidence = [
+        dict(r) for r in db.execute(
+            "SELECT id, format, source_path, parse_status FROM evidence_files WHERE case_id=?",
+            (case_id,),
+        ).fetchall()
+    ]
+
+    # Per-platform message counts
+    msg_counts = {}
+    for platform in ("sms", "whatsapp", "telegram", "signal"):
+        cnt = db.execute(
+            "SELECT COUNT(*) as c FROM messages WHERE case_id=? AND platform=?",
+            (case_id, platform),
+        ).fetchone()["c"]
+        msg_counts[platform] = cnt
+
+    # Call log count
+    call_count = db.execute(
+        "SELECT COUNT(*) as c FROM call_logs WHERE case_id=?", (case_id,)
+    ).fetchone()["c"]
+
+    # Contact count
+    contact_count = db.execute(
+        "SELECT COUNT(*) as c FROM contacts WHERE case_id=?", (case_id,)
+    ).fetchone()["c"]
+
+    artifacts = []
+    for platform in ("sms", "whatsapp", "telegram", "signal"):
+        artifacts.append({
+            "key": platform,
+            "label": platform.upper() if platform == "sms" else platform.title(),
+            "type": "messages",
+            "count": msg_counts[platform],
+        })
+    artifacts.append({"key": "call_logs", "label": "Call Logs", "type": "calls", "count": call_count})
+    artifacts.append({"key": "contacts", "label": "Contacts", "type": "contacts", "count": contact_count})
+
+    return jsonify({
+        "evidence": evidence,
+        "artifacts": artifacts,
+        "total_messages": sum(msg_counts.values()),
+        "total_calls": call_count,
+        "total_contacts": contact_count,
+    })
+
+
 @bp_analysis.get("/cases/<case_id>/analysis/stream")
 def analysis_stream(case_id: str):
     """SSE endpoint — streams analysis progress events for a case."""
