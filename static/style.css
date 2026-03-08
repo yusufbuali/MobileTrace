@@ -97,6 +97,10 @@ button[type="button"] { background: var(--surface2); color: var(--text); border:
 .evidence-item .ev-status-done { color: #3fb950; }
 .evidence-item .ev-status-error { color: var(--danger); }
 .ev-icon { vertical-align: middle; margin-right: 4px; color: var(--info); flex-shrink: 0; }
+.ev-progress-wrap { display: flex; align-items: center; gap: 8px; }
+.ev-progress-track { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.ev-progress-fill { height: 100%; width: 0%; background: var(--info); border-radius: 3px; transition: width 0.2s; }
+.ev-progress-pct { font-size: 0.75rem; color: var(--text-muted); min-width: 32px; }
 
 /* ── Analysis: utility ────────────────────────────────────────── */
 .aph-hidden { display: none !important; }

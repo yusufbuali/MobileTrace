@@ -246,23 +246,50 @@ document.querySelectorAll(".ev-mode-btn").forEach(btn => {
 });
 
 if (formUpload) {
-  formUpload.addEventListener("submit", async (e) => {
+  formUpload.addEventListener("submit", (e) => {
     e.preventDefault();
     if (!activeCaseId) return;
     const statusEl = document.getElementById("ev-upload-status");
-    if (statusEl) statusEl.textContent = "Uploading…";
+    const progressWrap = document.getElementById("ev-progress-wrap");
+    const progressFill = document.getElementById("ev-progress-fill");
+    const progressPct = document.getElementById("ev-progress-pct");
+    if (statusEl) statusEl.textContent = "";
+    if (progressWrap) progressWrap.style.display = "";
+    if (progressFill) progressFill.style.width = "0%";
+    if (progressPct) progressPct.textContent = "0%";
+
     const fd = new FormData(formUpload);
-    try {
-      const res = await fetch(`/api/cases/${activeCaseId}/evidence`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Upload failed");
-      formUpload.reset();
-      if (statusEl) statusEl.textContent = `Parsed — ${data.stats?.messages ?? 0} msgs, ${data.stats?.contacts ?? 0} contacts`;
-      _loadEvidence(activeCaseId);
-      openCase(activeCaseId);
-    } catch (err) {
-      if (statusEl) statusEl.textContent = `Error: ${err.message}`;
-    }
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `/api/cases/${activeCaseId}/evidence`);
+
+    xhr.upload.addEventListener("progress", (ev) => {
+      if (ev.lengthComputable) {
+        const pct = Math.round((ev.loaded / ev.total) * 100);
+        if (progressFill) progressFill.style.width = pct + "%";
+        if (progressPct) progressPct.textContent = pct + "%";
+      }
+    });
+
+    xhr.addEventListener("load", () => {
+      if (progressWrap) progressWrap.style.display = "none";
+      try {
+        const data = JSON.parse(xhr.responseText);
+        if (xhr.status >= 400) throw new Error(data.error || "Upload failed");
+        formUpload.reset();
+        showToast(`Parsed — ${data.stats?.messages ?? 0} msgs, ${data.stats?.contacts ?? 0} contacts`, "success");
+        _loadEvidence(activeCaseId);
+        openCase(activeCaseId);
+      } catch (err) {
+        showToast(`Upload error: ${err.message}`, "error");
+      }
+    });
+
+    xhr.addEventListener("error", () => {
+      if (progressWrap) progressWrap.style.display = "none";
+      showToast("Upload failed — network error", "error");
+    });
+
+    xhr.send(fd);
   });
 }
 
