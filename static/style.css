@@ -96,6 +96,7 @@ button[type="button"] { background: var(--surface2); color: var(--text); border:
 .evidence-item .ev-format { color: var(--info); font-weight: 600; font-size: 0.75rem; }
 .evidence-item .ev-status-done { color: #3fb950; }
 .evidence-item .ev-status-error { color: var(--danger); }
+.ev-icon { vertical-align: middle; margin-right: 4px; color: var(--info); flex-shrink: 0; }
 
 /* ── Analysis: utility ────────────────────────────────────────── */
 .aph-hidden { display: none !important; }

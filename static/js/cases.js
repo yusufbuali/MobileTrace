@@ -144,6 +144,17 @@ async function _loadStats(caseId) {
   } catch (_) { /* stats not critical */ }
 }
 
+function _formatIcon(format) {
+  const icons = {
+    ufdr: '<svg class="ev-icon" viewBox="0 0 16 16" width="16" height="16"><rect x="4" y="1" width="8" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/><line x1="8" y1="12" x2="8" y2="12.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    xry: '<svg class="ev-icon" viewBox="0 0 16 16" width="16" height="16"><rect x="2" y="4" width="12" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="1"/><line x1="5" y1="4" x2="5" y2="2" stroke="currentColor" stroke-width="1.2"/><line x1="8" y1="4" x2="8" y2="2" stroke="currentColor" stroke-width="1.2"/><line x1="11" y1="4" x2="11" y2="2" stroke="currentColor" stroke-width="1.2"/></svg>',
+    oxygen: '<svg class="ev-icon" viewBox="0 0 16 16" width="16" height="16"><ellipse cx="8" cy="8" rx="6" ry="5" fill="none" stroke="currentColor" stroke-width="1.2"/><ellipse cx="8" cy="8" rx="2.5" ry="2" fill="none" stroke="currentColor" stroke-width="1"/></svg>',
+    ios_fs: '<svg class="ev-icon" viewBox="0 0 16 16" width="16" height="16"><rect x="4" y="1" width="8" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"/><line x1="6" y1="3" x2="10" y2="3" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>',
+    android_tar: '<svg class="ev-icon" viewBox="0 0 16 16" width="16" height="16"><rect x="4" y="6" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="6.5" cy="9" r="0.7" fill="currentColor"/><circle cx="9.5" cy="9" r="0.7" fill="currentColor"/><line x1="4.5" y1="6" x2="3" y2="3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><line x1="11.5" y1="6" x2="13" y2="3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+  };
+  return icons[format] || icons[Object.keys(icons).find(k => (format || "").includes(k))] || '<svg class="ev-icon" viewBox="0 0 16 16" width="16" height="16"><rect x="3" y="1" width="10" height="14" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><line x1="5" y1="5" x2="11" y2="5" stroke="currentColor" stroke-width="1"/><line x1="5" y1="8" x2="11" y2="8" stroke="currentColor" stroke-width="1"/></svg>';
+}
+
 async function _loadEvidence(caseId) {
   const el = document.getElementById("evidence-list");
   if (!el) return;
@@ -153,6 +164,7 @@ async function _loadEvidence(caseId) {
       ? rows.map(e => `
           <div class="evidence-item">
             <div>
+              ${_formatIcon(e.format)}
               <span class="ev-format">${e.format}</span>
               <span style="margin-left:8px">${e.source_path || "uploaded file"}</span>
             </div>
