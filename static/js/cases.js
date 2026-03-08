@@ -313,11 +313,13 @@ if (formPath) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
       formPath.reset();
-      if (statusEl) statusEl.textContent = `Parsed — ${data.stats?.messages ?? 0} msgs, ${data.stats?.contacts ?? 0} contacts`;
+      if (statusEl) statusEl.textContent = "";
+      showToast(`Parsed — ${data.stats?.messages ?? 0} msgs, ${data.stats?.contacts ?? 0} contacts`, "success");
       _loadEvidence(activeCaseId);
       openCase(activeCaseId);
     } catch (err) {
-      if (statusEl) statusEl.textContent = `Error: ${err.message}`;
+      if (statusEl) statusEl.textContent = "";
+      showToast(`Parse error: ${err.message}`, "error");
     }
   });
 }
@@ -342,7 +344,7 @@ formNewCase?.addEventListener("submit", async (e) => {
     openCase(c.id);
     formNewCase.reset();
   } catch (err) {
-    alert("Failed to create case: " + err.message);
+    showToast("Failed to create case: " + err.message, "error");
   }
 });
 
