@@ -221,13 +221,42 @@
     .platform-section-title { font-size:0.75rem; font-weight:700; text-transform:uppercase;
       letter-spacing:0.06em; color:var(--muted); margin:14px 0 8px; }
 
-    /* ── Print ────────────────────────────────────────────────── */
-    @media print {
-      body { padding: 12px; font-size: 11px; background: #fff; color: #000; }
-      .panel, .panel-alt { background: #fff; box-shadow: none; border-color: #ccc; }
-      .graph-container { page-break-inside: avoid; }
-      h2 { page-break-after: avoid; }
-    }
+/* ── Print / WeasyPrint ───────────────────────────────────────────────────── */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 10pt;
+  }
+  .panel {
+    background: #f8f9fa !important;
+    border: 1px solid #cccccc !important;
+    page-break-inside: avoid;
+    margin-bottom: 12pt;
+  }
+  h1, h2, h3 { color: #000000 !important; page-break-after: avoid; }
+  .badge, .risk-badge, .confidence-inline {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  /* Hide interactive / decorative elements */
+  details > summary::marker { display: none; }
+  .panel-alt { background: #f0f0f0 !important; }
+  table { border-collapse: collapse; }
+  th, td { border: 1px solid #cccccc !important; color: #000000 !important; }
+  th { background: #e8e8e8 !important; }
+  a { color: #000000 !important; text-decoration: none; }
+}
+
+@page {
+  size: A4;
+  margin: 15mm 15mm 20mm 15mm;
+  @bottom-center {
+    content: "MobileTrace Report — Page " counter(page) " of " counter(pages);
+    font-size: 8pt;
+    color: #666666;
+  }
+}
   </style>
 </head>
 <body>
