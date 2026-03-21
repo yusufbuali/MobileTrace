@@ -8,12 +8,13 @@ let _caseId = null;
 let _threads = [];
 let _activePlatform = null;  // null = all platforms
 let _searchTimer = null;
+let _annotations = new Map(); // message_id (number) → annotation object
 
 function dom(id) { return document.getElementById(id); }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export function initConversations(caseId) {
+export async function initConversations(caseId) {
   clearTimeout(_searchTimer);
   if (!caseId) {
     _showNoCaseState();
@@ -21,6 +22,8 @@ export function initConversations(caseId) {
   }
   _caseId = caseId;
   _activePlatform = null;
+  _annotations = new Map(); // reset on case switch
+  await _loadAnnotations(caseId);
   _loadThreads();
   _wireSearch();
   _wireDateJump();
@@ -67,6 +70,15 @@ export async function selectThread(platform, threadId, messageId = null) {
     el.classList.toggle("active", isTarget);
     if (isTarget) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
   });
+}
+
+async function _loadAnnotations(caseId) {
+  try {
+    const res = await fetch(`/api/cases/${caseId}/annotations`);
+    if (!res.ok) return;
+    const list = await res.json();
+    _annotations = new Map(list.map(a => [a.message_id, a]));
+  } catch (_) { /* non-critical */ }
 }
 
 function _showNoCaseState() {
@@ -297,7 +309,109 @@ function _renderBubble(msg, showOrigin) {
   content.appendChild(bubble);
   content.appendChild(ts);
   wrap.appendChild(content);
+
+  // Annotation flag button (only for messages with a DB id)
+  if (msg.id) {
+    const ann = _annotations.get(msg.id);
+    const flagBtn = document.createElement("button");
+    flagBtn.className = "ann-flag-btn" + (ann ? " has-ann" : "");
+    flagBtn.title = ann ? `${ann.tag}${ann.note ? ": " + ann.note : ""}` : "Annotate";
+    flagBtn.textContent = ann ? "★" : "☆";
+    flagBtn.dataset.msgId = msg.id;
+    flagBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      _openAnnotationPanel(flagBtn, msg, _caseId);
+    });
+    wrap.appendChild(flagBtn);
+
+    // If annotated, add tag badge
+    if (ann) {
+      const badge = document.createElement("span");
+      badge.className = `ann-tag-badge ann-tag-${ann.tag.toLowerCase()}`;
+      badge.textContent = ann.tag.replace(/_/g, " ");
+      wrap.appendChild(badge);
+    }
+  }
+
   return wrap;
+}
+
+// ── Annotations ───────────────────────────────────────────────────────────────
+
+function _openAnnotationPanel(flagBtn, msg, caseId) {
+  // Close any existing open panel
+  document.querySelectorAll(".ann-panel").forEach(p => p.remove());
+
+  const tpl = document.getElementById("tpl-annotation-panel");
+  const panel = tpl.content.cloneNode(true).querySelector(".ann-panel");
+  const ann = _annotations.get(msg.id);
+
+  const select = panel.querySelector(".ann-tag-select");
+  const noteInput = panel.querySelector(".ann-note-input");
+  const saveBtn = panel.querySelector(".ann-save-btn");
+  const deleteBtn = panel.querySelector(".ann-delete-btn");
+  const cancelBtn = panel.querySelector(".ann-cancel-btn");
+
+  if (ann) {
+    select.value = ann.tag;
+    noteInput.value = ann.note || "";
+    deleteBtn.style.display = "";
+  }
+
+  saveBtn.addEventListener("click", async () => {
+    const tag = select.value;
+    const note = noteInput.value.trim();
+    try {
+      const res = await fetch(`/api/cases/${caseId}/annotations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message_id: msg.id, tag, note }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const updated = await res.json();
+      _annotations.set(msg.id, updated);
+      _refreshBubbleAnnotation(flagBtn, updated);
+      panel.remove();
+    } catch (err) {
+      alert(`Failed to save annotation: ${err.message}`);
+    }
+  });
+
+  deleteBtn.addEventListener("click", async () => {
+    const existing = _annotations.get(msg.id);
+    if (!existing) { panel.remove(); return; }
+    try {
+      await fetch(`/api/cases/${caseId}/annotations/${existing.id}`, { method: "DELETE" });
+      _annotations.delete(msg.id);
+      _refreshBubbleAnnotation(flagBtn, null);
+      panel.remove();
+    } catch (err) {
+      alert(`Failed to delete: ${err.message}`);
+    }
+  });
+
+  cancelBtn.addEventListener("click", () => panel.remove());
+
+  // Insert panel below the flag button
+  flagBtn.insertAdjacentElement("afterend", panel);
+  noteInput.focus();
+}
+
+function _refreshBubbleAnnotation(flagBtn, ann) {
+  flagBtn.className = "ann-flag-btn" + (ann ? " has-ann" : "");
+  flagBtn.textContent = ann ? "★" : "☆";
+  flagBtn.title = ann ? `${ann.tag}${ann.note ? ": " + ann.note : ""}` : "Annotate";
+
+  // Remove old badge if present
+  const oldBadge = flagBtn.parentElement?.querySelector(".ann-tag-badge");
+  if (oldBadge) oldBadge.remove();
+
+  if (ann) {
+    const badge = document.createElement("span");
+    badge.className = `ann-tag-badge ann-tag-${ann.tag.toLowerCase()}`;
+    badge.textContent = ann.tag.replace(/_/g, " ");
+    flagBtn.insertAdjacentElement("afterend", badge);
+  }
 }
 
 // ── Search ────────────────────────────────────────────────────────────────────

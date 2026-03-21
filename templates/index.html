@@ -327,6 +327,24 @@
               <div id="conv-messages" class="conv-messages"></div>
             </div>
           </div>
+          <!-- Annotation panel template (hidden, cloned by JS) -->
+          <template id="tpl-annotation-panel">
+            <div class="ann-panel">
+              <select class="ann-tag-select">
+                <option value="KEY_EVIDENCE">KEY EVIDENCE</option>
+                <option value="SUSPICIOUS">SUSPICIOUS</option>
+                <option value="ALIBI">ALIBI</option>
+                <option value="EXCULPATORY">EXCULPATORY</option>
+                <option value="NOTE">NOTE</option>
+              </select>
+              <input class="ann-note-input" type="text" maxlength="1000" placeholder="Add a note (optional)…" />
+              <div class="ann-panel-actions">
+                <button class="ann-save-btn btn-primary">Save</button>
+                <button class="ann-delete-btn btn-secondary" style="display:none">Remove</button>
+                <button class="ann-cancel-btn btn-secondary">Cancel</button>
+              </div>
+            </div>
+          </template>
         </div>
 
         <!-- Analysis tab -->
