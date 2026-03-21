@@ -17,6 +17,9 @@ Telegram is heavily used for encrypted group coordination, channels, self-destru
 and secret chats. SQLCipher-encrypted databases (Telegram v4+) may yield no message content —
 in that case, the existence of Telegram itself is forensically significant.
 
+## Platform Note
+Encrypted platform choice alone is NOT an indicator — only flag when message content supports it.
+
 ## Analysis Requirements
 
 ### 1. Conversation Risk Assessment (REQUIRED)
@@ -46,6 +49,9 @@ Numeric thread IDs (dialog_id > 1,000,000,000 often indicate channels/supergroup
 - What content the user communicated about
 - Whether device owner was primarily sending or receiving
 
+### 5. Crime Indicator Detection
+Scan all data for indicators matching the crime categories in the system prompt. For each category with supporting evidence, create a `crime_indicators` entry with at least one `evidence_ref` citing timestamp + quoted text. Do not tag without citable evidence.
+
 ## Output Format
 
 Return ONLY valid JSON — no markdown fences, no explanation text outside the JSON.
@@ -55,6 +61,12 @@ Return ONLY valid JSON — no markdown fences, no explanation text outside the J
   "risk_level_summary": "One-sentence overall risk assessment",
   "confidence_level": "CRITICAL|HIGH|MEDIUM|LOW",
   "encryption_status": "Decrypted successfully | SQLCipher-encrypted — content not accessible",
+  "data_coverage": {
+    "records_analyzed": 500,
+    "total_records": 1247,
+    "coverage_percent": 40.1,
+    "note": "Analysis covers first 500 of 1,247 records by timestamp"
+  },
   "conversation_risk_assessment": [
     {
       "thread_id": "dialog_id_or_contact_name",
@@ -70,9 +82,21 @@ Return ONLY valid JSON — no markdown fences, no explanation text outside the J
     {
       "thread_id": "dialog_id_or_contact_name",
       "summary": "Forensic significance",
+      "confidence": "observed|inferred",
       "key_messages": [
         { "timestamp": "2021-11-25T19:33:08Z", "direction": "incoming", "body": "message text" }
       ]
+    }
+  ],
+  "crime_indicators": [
+    {
+      "category": "DRUG_TRAFFICKING",
+      "confidence": "observed",
+      "severity": "HIGH",
+      "evidence_refs": [
+        { "timestamp": "2021-11-25T19:33:08Z", "thread_id": "dialog_id", "quote": "exact text", "direction": "incoming" }
+      ],
+      "summary": "Why this indicates the category"
     }
   ]
 }

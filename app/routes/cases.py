@@ -41,6 +41,38 @@ def create_case():
     return jsonify(_row_to_dict(row)), 201
 
 
+_RISK_RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+_RISK_RANK_TO_LEVEL = {v: k for k, v in _RISK_RANK.items()}
+import re as _re
+
+
+def _parse_risk_level(result_text: str) -> str | None:
+    """Extract the highest risk level mentioned in a JSON analysis result."""
+    if not result_text:
+        return None
+    try:
+        parsed = json.loads(result_text)
+    except Exception:
+        # Try to extract from raw text
+        m = _re.search(r'\b(CRITICAL|HIGH|MEDIUM|LOW)\b', result_text)
+        return m.group(1) if m else None
+    if not isinstance(parsed, dict):
+        return None
+    # Check risk_level_summary / risk_level fields
+    for field in ("risk_level_summary", "risk_level", "risk_classification", "overall_assessment"):
+        val = str(parsed.get(field) or "")
+        m = _re.search(r'\b(CRITICAL|HIGH|MEDIUM|LOW)\b', val, _re.I)
+        if m:
+            return m.group(1).upper()
+    # Check conversation_risk_assessment items
+    cra = parsed.get("conversation_risk_assessment") or []
+    best = 0
+    for item in (cra if isinstance(cra, list) else []):
+        lvl = (item.get("risk_level") or "").upper()
+        best = max(best, _RISK_RANK.get(lvl, 0))
+    return _RISK_RANK_TO_LEVEL.get(best) if best else None
+
+
 @bp_cases.get("/cases")
 def list_cases():
     status = request.args.get("status")
@@ -53,7 +85,24 @@ def list_cases():
         rows = db.execute(
             "SELECT * FROM cases ORDER BY created_at DESC"
         ).fetchall()
-    return jsonify([_row_to_dict(r) for r in rows])
+    cases = [_row_to_dict(r) for r in rows]
+    if cases:
+        case_ids = [c["id"] for c in cases]
+        placeholders = ",".join("?" * len(case_ids))
+        analysis_rows = db.execute(
+            f"SELECT case_id, result FROM analysis_results WHERE case_id IN ({placeholders})",
+            case_ids,
+        ).fetchall()
+        # Build max risk per case
+        risk_map: dict[str, int] = {}
+        for ar in analysis_rows:
+            lvl = _parse_risk_level(ar["result"] or "")
+            rank = _RISK_RANK.get(lvl, 0) if lvl else 0
+            risk_map[ar["case_id"]] = max(risk_map.get(ar["case_id"], 0), rank)
+        for c in cases:
+            rank = risk_map.get(c["id"], 0)
+            c["risk_level"] = _RISK_RANK_TO_LEVEL.get(rank) if rank else None
+    return jsonify(cases)
 
 
 @bp_cases.get("/cases/<case_id>")
@@ -321,6 +370,20 @@ def _ingest_path(db, case_id: str, case_dir: Path, source_path: Path, signal_key
         )
         db.commit()
         return jsonify({"error": str(exc)}), 422
+
+
+@bp_cases.delete("/cases/<case_id>/evidence/<evidence_id>")
+def delete_evidence(case_id: str, evidence_id: str):
+    db = get_db()
+    row = db.execute(
+        "SELECT id FROM evidence_files WHERE id=? AND case_id=?",
+        (evidence_id, case_id),
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "not found"}), 404
+    db.execute("DELETE FROM evidence_files WHERE id=?", (evidence_id,))
+    db.commit()
+    return jsonify({"deleted": evidence_id})
 
 
 @bp_cases.get("/cases/<case_id>/threads")

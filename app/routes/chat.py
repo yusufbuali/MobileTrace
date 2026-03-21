@@ -13,8 +13,12 @@ bp_chat = Blueprint("chat", __name__, url_prefix="/api")
 
 _CHAT_SYSTEM_PROMPT = (
     "You are a digital forensics AI assistant helping an investigator analyse a mobile device case. "
-    "Answer questions based only on the evidence provided. "
-    "Cite specific data points (timestamps, phone numbers, message content) when relevant. "
+    "Base every statement exclusively on the evidence provided. Never fabricate or assume. "
+    "Always include exact timestamp, sender/recipient, and quote message body directly. "
+    "Distinguish 'The data shows...' (observed) from 'This pattern may suggest...' (inferred). "
+    "When asked about criminal activity, reference crime categories (DRUG_TRAFFICKING, CSAM_GROOMING, "
+    "TERRORISM, HUMAN_TRAFFICKING, MONEY_LAUNDERING, FRAUD, CYBER_CRIME, ORGANIZED_CRIME, WEAPONS, "
+    "DOMESTIC_VIOLENCE, STALKING, SEXUAL_OFFENSE) only when evidence supports it. "
     "If the context does not contain relevant evidence, say so clearly."
 )
 
@@ -96,7 +100,24 @@ def chat(case_id: str):
     )
     db.commit()
 
-    return jsonify({"response": response_text, "context_count": len(context_rows)})
+    citations = [
+        {
+            "platform": r.get("platform", ""),
+            "thread_id": r.get("thread_id") or r.get("sender") or "",
+            "timestamp": r.get("timestamp", ""),
+            "direction": r.get("direction", ""),
+            "body": (r.get("body") or r.get("text") or "")[:200],
+            "source": r.get("source", "message"),
+        }
+        for r in context_rows
+        if r.get("source") == "message"
+    ]
+
+    return jsonify({
+        "response": response_text,
+        "context_count": len(context_rows),
+        "citations": citations,
+    })
 
 
 @bp_chat.get("/cases/<case_id>/chat/history")

@@ -41,6 +41,9 @@ For each unique phone number, assess:
 - Media messages (empty body with MMS context)
 - Group message threads (multiple recipients)
 
+### 5. Crime Indicator Detection
+Scan all data for indicators matching the crime categories in the system prompt. For each category with supporting evidence, create a `crime_indicators` entry with at least one `evidence_ref` citing timestamp + quoted text. Do not tag without citable evidence.
+
 ## Output Format
 
 Return ONLY valid JSON — no markdown fences, no explanation text outside the JSON.
@@ -49,6 +52,12 @@ Return ONLY valid JSON — no markdown fences, no explanation text outside the J
 {
   "risk_level_summary": "One-sentence overall risk assessment",
   "confidence_level": "CRITICAL|HIGH|MEDIUM|LOW",
+  "data_coverage": {
+    "records_analyzed": 500,
+    "total_records": 1247,
+    "coverage_percent": 40.1,
+    "note": "Analysis covers first 500 of 1,247 records by timestamp"
+  },
   "conversation_risk_assessment": [
     {
       "thread_id": "+1234567890",
@@ -64,9 +73,21 @@ Return ONLY valid JSON — no markdown fences, no explanation text outside the J
     {
       "thread_id": "+1234567890",
       "summary": "Forensic significance of this thread",
+      "confidence": "observed|inferred",
       "key_messages": [
         { "timestamp": "2021-12-11T16:11:00Z", "direction": "outgoing", "body": "message text" }
       ]
+    }
+  ],
+  "crime_indicators": [
+    {
+      "category": "DRUG_TRAFFICKING",
+      "confidence": "observed",
+      "severity": "HIGH",
+      "evidence_refs": [
+        { "timestamp": "2021-12-11T16:11:00Z", "thread_id": "+1234567890", "quote": "exact text", "direction": "outgoing" }
+      ],
+      "summary": "Why this indicates the category"
     }
   ]
 }

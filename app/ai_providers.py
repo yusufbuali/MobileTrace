@@ -1857,12 +1857,28 @@ class OpenRouterProvider(AIProvider):
                 max_tokens=min(max_tokens, 128000),  # OpenRouter model limits vary
             )
 
-            text = ""
+            raw = ""
             if response.choices:
-                text = response.choices[0].message.content or ""
-            text = _strip_leading_reasoning_blocks(text)
+                raw = response.choices[0].message.content or ""
+            text = _strip_leading_reasoning_blocks(raw)
             if not text:
-                raise AIProviderError("OpenRouter returned an empty response.")
+                if not raw.strip():
+                    raise AIProviderError(
+                        "OpenRouter returned an empty response. "
+                        "This model may not support the configured parameters."
+                    )
+                # Entire response was reasoning-only — extract content from inside tags
+                inner = re.sub(
+                    r"<\s*(?:think|thinking|reasoning)\b[^>]*>(.*?)<\s*/\s*(?:think|thinking|reasoning)\s*>",
+                    r"\1", raw, flags=re.IGNORECASE | re.DOTALL,
+                ).strip()
+                if inner:
+                    text = inner
+                else:
+                    raise AIProviderError(
+                        "OpenRouter returned only a reasoning block with no answer. "
+                        "Try a different model."
+                    )
             return text
 
         return self._run_request(_request)

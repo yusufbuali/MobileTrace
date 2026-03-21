@@ -9,6 +9,9 @@ Each contact record contains:
 - `email` — email address (may be empty)
 - `source_app` — where extracted from (e.g., `"android_contacts"`, `"ios_addressbook"`)
 
+## Platform Note
+Contact records alone rarely establish crime. Only tag when names/labels contain explicitly criminal references. Mark as `inferred`.
+
 ## Analysis Requirements
 
 ### 1. Contact Inventory
@@ -31,6 +34,9 @@ Each contact record contains:
 - Distribution by country code (international contacts)
 - International contacts (flag country codes outside local jurisdiction)
 
+### 5. Crime Indicator Detection
+Scan all data for indicators matching the crime categories in the system prompt. For each category with supporting evidence, create a `crime_indicators` entry with at least one `evidence_ref` citing the contact name/phone. Do not tag without citable evidence.
+
 ## Output Format
 
 Return ONLY valid JSON — no markdown fences, no explanation text outside the JSON.
@@ -39,6 +45,12 @@ Return ONLY valid JSON — no markdown fences, no explanation text outside the J
 {
   "risk_level_summary": "One-sentence overall risk assessment",
   "confidence_level": "CRITICAL|HIGH|MEDIUM|LOW",
+  "data_coverage": {
+    "records_analyzed": 42,
+    "total_records": 42,
+    "coverage_percent": 100.0,
+    "note": "All contact records included"
+  },
   "total_contacts": 42,
   "persons_of_interest_matches": ["Name or number that matches investigation context"],
   "suspicious_contacts": [
@@ -51,7 +63,19 @@ Return ONLY valid JSON — no markdown fences, no explanation text outside the J
     {
       "thread_id": "contact identifier",
       "summary": "Why this contact is forensically significant",
+      "confidence": "observed|inferred",
       "key_messages": []
+    }
+  ],
+  "crime_indicators": [
+    {
+      "category": "DRUG_TRAFFICKING",
+      "confidence": "inferred",
+      "severity": "MEDIUM",
+      "evidence_refs": [
+        { "timestamp": "", "thread_id": "+1234567890", "quote": "Contact name: 'Snow Man'", "direction": "" }
+      ],
+      "summary": "Why this contact name indicates the category"
     }
   ]
 }

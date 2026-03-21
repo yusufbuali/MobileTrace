@@ -10,6 +10,9 @@ Each call record contains:
 - `duration_s` — call duration in seconds (0 for missed)
 - `timestamp` — ISO 8601 UTC string
 
+## Platform Note
+Call metadata alone cannot confirm content. Mark all call-derived crime indicators as `inferred`.
+
 ## Analysis Requirements
 
 ### 1. Contact Risk Assessment (REQUIRED)
@@ -40,6 +43,9 @@ Each call record contains:
 - International calls (flag country code)
 - FaceTime calls (platform=facetime_video/facetime_audio) — indicate Apple device cross-communication
 
+### 5. Crime Indicator Detection
+Scan all data for indicators matching the crime categories in the system prompt. For each category with supporting evidence, create a `crime_indicators` entry with at least one `evidence_ref` citing timestamp + quoted text. Do not tag without citable evidence.
+
 ## Output Format
 
 Return ONLY valid JSON — no markdown fences, no explanation text outside the JSON.
@@ -48,6 +54,12 @@ Return ONLY valid JSON — no markdown fences, no explanation text outside the J
 {
   "risk_level_summary": "One-sentence overall risk assessment",
   "confidence_level": "CRITICAL|HIGH|MEDIUM|LOW",
+  "data_coverage": {
+    "records_analyzed": 300,
+    "total_records": 450,
+    "coverage_percent": 66.7,
+    "note": "Analysis covers first 300 of 450 records by timestamp"
+  },
   "conversation_risk_assessment": [
     {
       "thread_id": "+1234567890",
@@ -65,7 +77,19 @@ Return ONLY valid JSON — no markdown fences, no explanation text outside the J
     {
       "thread_id": "+1234567890",
       "summary": "Forensic significance of this contact's call pattern",
+      "confidence": "observed|inferred",
       "key_messages": []
+    }
+  ],
+  "crime_indicators": [
+    {
+      "category": "ORGANIZED_CRIME",
+      "confidence": "inferred",
+      "severity": "MEDIUM",
+      "evidence_refs": [
+        { "timestamp": "2021-12-11T03:22:00Z", "thread_id": "+1234567890", "quote": "call metadata only — no content", "direction": "outgoing" }
+      ],
+      "summary": "Why this pattern indicates the category"
     }
   ]
 }

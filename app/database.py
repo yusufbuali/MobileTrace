@@ -109,6 +109,18 @@ CREATE VIRTUAL TABLE IF NOT EXISTS contacts_fts USING fts5(
     content_rowid='id'
 );
 
+-- Performance indexes
+CREATE INDEX IF NOT EXISTS idx_messages_case_id     ON messages(case_id);
+CREATE INDEX IF NOT EXISTS idx_messages_timestamp   ON messages(timestamp);
+CREATE INDEX IF NOT EXISTS idx_messages_platform    ON messages(platform);
+CREATE INDEX IF NOT EXISTS idx_messages_thread_id   ON messages(thread_id);
+CREATE INDEX IF NOT EXISTS idx_calls_case_id        ON call_logs(case_id);
+CREATE INDEX IF NOT EXISTS idx_calls_timestamp      ON call_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_contacts_case_id     ON contacts(case_id);
+CREATE INDEX IF NOT EXISTS idx_analysis_case_id     ON analysis_results(case_id);
+CREATE INDEX IF NOT EXISTS idx_chat_history_case_id ON chat_history(case_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_case_id     ON evidence_files(case_id);
+
 -- Triggers to keep FTS5 in sync
 CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
     INSERT INTO messages_fts(rowid, body, sender, recipient)

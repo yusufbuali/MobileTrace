@@ -24,6 +24,10 @@ def _parse_json_result(s: str) -> dict | None:
     s = s.strip()
     if not s:
         return None
+    # Strip markdown code fences (```json ... ``` or ``` ... ```)
+    fence_match = _re.match(r"^```(?:json)?\s*([\s\S]*?)\s*```$", s, _re.IGNORECASE)
+    if fence_match:
+        s = fence_match.group(1).strip()
     try:
         return json.loads(s)
     except Exception:
@@ -452,7 +456,16 @@ class MobileAnalyzer:
                 (case_id, platform, _MSG_LIMIT),
             ).fetchall()
             if rows:
-                artifacts[platform] = _format_messages(rows)
+                total = db.execute(
+                    "SELECT COUNT(*) FROM messages WHERE case_id=? AND platform=?",
+                    (case_id, platform),
+                ).fetchone()[0]
+                pct = (len(rows) / total * 100) if total else 100.0
+                coverage = (
+                    f"## Data Coverage\n"
+                    f"Records provided: {len(rows)} of {total} total ({pct:.1f}%)\n\n"
+                )
+                artifacts[platform] = coverage + _format_messages(rows)
 
         # Call logs
         rows = db.execute(
@@ -461,7 +474,16 @@ class MobileAnalyzer:
             (case_id, _CALL_LIMIT),
         ).fetchall()
         if rows:
-            artifacts["call_logs"] = _format_calls(rows)
+            total = db.execute(
+                "SELECT COUNT(*) FROM call_logs WHERE case_id=?",
+                (case_id,),
+            ).fetchone()[0]
+            pct = (len(rows) / total * 100) if total else 100.0
+            coverage = (
+                f"## Data Coverage\n"
+                f"Records provided: {len(rows)} of {total} total ({pct:.1f}%)\n\n"
+            )
+            artifacts["call_logs"] = coverage + _format_calls(rows)
 
         # Contacts
         rows = db.execute(
@@ -470,7 +492,16 @@ class MobileAnalyzer:
             (case_id, _CONTACT_LIMIT),
         ).fetchall()
         if rows:
-            artifacts["contacts"] = _format_contacts(rows)
+            total = db.execute(
+                "SELECT COUNT(*) FROM contacts WHERE case_id=?",
+                (case_id,),
+            ).fetchone()[0]
+            pct = (len(rows) / total * 100) if total else 100.0
+            coverage = (
+                f"## Data Coverage\n"
+                f"Records provided: {len(rows)} of {total} total ({pct:.1f}%)\n\n"
+            )
+            artifacts["contacts"] = coverage + _format_contacts(rows)
 
         return artifacts
 

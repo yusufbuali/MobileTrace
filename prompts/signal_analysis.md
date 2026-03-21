@@ -16,6 +16,9 @@ Each message record contains:
 - `body` — message text (empty for media)
 - `timestamp` — ISO 8601 UTC string
 
+## Platform Note
+Encrypted platform choice alone is NOT an indicator — only flag when message content supports it.
+
 ## Analysis Requirements
 
 ### If No Data Returned (encrypted database)
@@ -41,6 +44,9 @@ State clearly:
 | +9731234567 | 45 | 6/10 | MEDIUM | Frequent late-night contact, media sharing |
 ```
 
+### Crime Indicator Detection
+Scan all data for indicators matching the crime categories in the system prompt. For each category with supporting evidence, create a `crime_indicators` entry with at least one `evidence_ref` citing timestamp + quoted text. Do not tag without citable evidence.
+
 ## Output Format
 
 Return ONLY valid JSON — no markdown fences, no explanation text outside the JSON.
@@ -51,7 +57,14 @@ Return ONLY valid JSON — no markdown fences, no explanation text outside the J
   "confidence_level": "HIGH",
   "encryption_status": "SQLCipher-encrypted | Decrypted successfully",
   "legal_recommendation": "Obtain decryption key via GrayKey/Cellebrite Physical/passcode seizure",
+  "data_coverage": {
+    "records_analyzed": 0,
+    "total_records": 0,
+    "coverage_percent": 0,
+    "note": "No records accessible — database encrypted"
+  },
   "conversation_risk_assessment": [],
-  "key_findings": []
+  "key_findings": [],
+  "crime_indicators": []
 }
 ```

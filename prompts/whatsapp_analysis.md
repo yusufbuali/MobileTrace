@@ -12,6 +12,9 @@ Each message record contains:
 - `timestamp` — ISO 8601 UTC string
 - `thread_id` — WhatsApp JID (e.g., `9731234567@s.whatsapp.net`)
 
+## Platform Note
+Encrypted platform choice alone is NOT an indicator — only flag when message content supports it.
+
 ## Analysis Requirements
 
 ### 1. Conversation Risk Assessment (REQUIRED)
@@ -41,6 +44,9 @@ For each unique thread_id, assess risk and produce a Markdown table:
 - International numbers (flag country codes)
 - Unknown numbers (no display name context)
 
+### 5. Crime Indicator Detection
+Scan all data for indicators matching the crime categories in the system prompt. For each category with supporting evidence, create a `crime_indicators` entry with at least one `evidence_ref` citing timestamp + quoted text. Do not tag without citable evidence.
+
 ## Output Format
 
 Return ONLY valid JSON — no markdown fences, no explanation text outside the JSON.
@@ -49,6 +55,12 @@ Return ONLY valid JSON — no markdown fences, no explanation text outside the J
 {
   "risk_level_summary": "One-sentence overall risk assessment",
   "confidence_level": "CRITICAL|HIGH|MEDIUM|LOW",
+  "data_coverage": {
+    "records_analyzed": 500,
+    "total_records": 1247,
+    "coverage_percent": 40.1,
+    "note": "Analysis covers first 500 of 1,247 records by timestamp"
+  },
   "conversation_risk_assessment": [
     {
       "thread_id": "+1234567890@s.whatsapp.net",
@@ -64,9 +76,21 @@ Return ONLY valid JSON — no markdown fences, no explanation text outside the J
     {
       "thread_id": "+1234567890@s.whatsapp.net",
       "summary": "Forensic significance",
+      "confidence": "observed|inferred",
       "key_messages": [
         { "timestamp": "2021-12-01T01:44:07Z", "direction": "outgoing", "body": "message text" }
       ]
+    }
+  ],
+  "crime_indicators": [
+    {
+      "category": "DRUG_TRAFFICKING",
+      "confidence": "observed",
+      "severity": "HIGH",
+      "evidence_refs": [
+        { "timestamp": "2021-12-01T01:44:07Z", "thread_id": "+1234567890@s.whatsapp.net", "quote": "exact text", "direction": "outgoing" }
+      ],
+      "summary": "Why this indicates the category"
     }
   ]
 }

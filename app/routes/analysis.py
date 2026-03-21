@@ -14,6 +14,8 @@ from app.database import get_db
 
 bp_analysis = Blueprint("analysis", __name__, url_prefix="/api")
 
+_RISK_RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
+
 # In-memory queues for SSE: case_id → queue of SSE event strings
 _progress_queues: dict[str, "queue.Queue[str | None]"] = {}
 _queues_lock = threading.Lock()
@@ -401,6 +403,95 @@ def multi_run_stream(case_id: str, run_id: str):
         content_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@bp_analysis.get("/cases/<case_id>/analysis/summary")
+def get_analysis_summary(case_id: str):
+    import re as _re
+    db = get_db()
+    row = db.execute("SELECT id FROM cases WHERE id=?", (case_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "not found"}), 404
+
+    rows = db.execute(
+        "SELECT artifact_key, result, provider, created_at "
+        "FROM analysis_results WHERE case_id=? ORDER BY created_at ASC",
+        (case_id,)
+    ).fetchall()
+
+    if not rows:
+        return jsonify({"has_analysis": False})
+
+    analyzed_at = rows[-1]["created_at"]
+    artifacts_analyzed, risk_rank = [], 0
+    crime_map, top_risk_threads = {}, []
+    risk_level_summaries, data_coverage = [], []
+
+    for r in rows:
+        key = r["artifact_key"]
+        parsed = _safe_json_parse(r["result"] or "", _re)
+        if not parsed:
+            continue
+        artifacts_analyzed.append(key)
+
+        cl = (parsed.get("confidence_level") or "").upper()
+        rank = _RISK_RANK.get(cl, 0)
+        if rank > risk_rank:
+            risk_rank = rank
+
+        summary_text = parsed.get("risk_level_summary", "")
+        if summary_text:
+            risk_level_summaries.append({"artifact": key, "summary": summary_text})
+
+        for ci in (parsed.get("crime_indicators") or []):
+            cat = (ci.get("category") or "").upper()
+            if not cat:
+                continue
+            ci_rank = _RISK_RANK.get((ci.get("confidence") or "LOW").upper(), 0)
+            existing = crime_map.get(cat)
+            if not existing or ci_rank > _RISK_RANK.get((existing.get("confidence") or "LOW").upper(), 0):
+                crime_map[cat] = {
+                    "category": cat,
+                    "confidence": ci.get("confidence", "LOW"),
+                    "severity": ci.get("severity", ci.get("confidence", "LOW")),
+                    "artifact": key,
+                }
+
+        for t in (parsed.get("conversation_risk_assessment") or []):
+            try:
+                score = float(t.get("risk_score", 0))
+            except (TypeError, ValueError):
+                score = 0
+            top_risk_threads.append({
+                "thread_id": t.get("thread_id", ""),
+                "risk_score": score,
+                "risk_level": (t.get("risk_level") or "").upper(),
+                "artifact": key,
+                "indicators": (t.get("key_indicators") or [])[:3],
+            })
+
+        cov = parsed.get("data_coverage") or {}
+        if cov:
+            data_coverage.append({
+                "artifact": key,
+                "records_analyzed": cov.get("records_analyzed", 0),
+                "total_records": cov.get("total_records", 0),
+                "coverage_percent": cov.get("coverage_percent", 0),
+            })
+
+    rank_to_level = {4: "CRITICAL", 3: "HIGH", 2: "MEDIUM", 1: "LOW", 0: "NONE"}
+    top_risk_threads.sort(key=lambda x: x["risk_score"], reverse=True)
+
+    return jsonify({
+        "has_analysis": True,
+        "analyzed_at": analyzed_at,
+        "artifacts_analyzed": artifacts_analyzed,
+        "overall_risk_level": rank_to_level.get(risk_rank, "NONE"),
+        "crime_categories": list(crime_map.values()),
+        "top_risk_threads": top_risk_threads[:5],
+        "risk_level_summaries": risk_level_summaries,
+        "data_coverage": data_coverage,
+    })
 
 
 def _safe_json_parse(s: str, re_mod) -> dict | None:
