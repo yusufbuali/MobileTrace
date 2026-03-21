@@ -36,18 +36,23 @@ def get_timeline(case_id):
     if not db.execute("SELECT 1 FROM cases WHERE id=?", (case_id,)).fetchone():
         abort(404)
 
-    limit = min(int(request.args.get("limit", 100)), 500)
+    try:
+        limit = min(int(request.args.get("limit", 100)), 500)
+    except (ValueError, TypeError):
+        limit = 100
     cursor_ts  = request.args.get("cursor_ts", "")
     cursor_key = request.args.get("cursor_key", "")
     platforms_raw = request.args.get("platforms", "")
     platform_filter = [p.strip() for p in platforms_raw.split(",") if p.strip()]
 
     # row_key is namespaced to prevent id collision between messages and call_logs
-    # (both tables use INTEGER PRIMARY KEY AUTOINCREMENT starting from 1)
+    # (both tables use INTEGER PRIMARY KEY AUTOINCREMENT starting from 1).
+    # Zero-padded via printf so lexicographic order matches numeric order.
     msg_sql = (
         "SELECT id, 'message' AS type, platform, timestamp, direction,"
         "       sender, recipient, body, thread_id,"
-        "       'msg-' || id AS row_key"
+        "       printf('msg-%020d', id) AS row_key,"
+        "       NULL AS duration_s"
         " FROM messages WHERE case_id=:cid"
     )
     call_sql = (
@@ -55,7 +60,8 @@ def get_timeline(case_id):
         "       CASE WHEN direction='incoming' THEN number ELSE NULL END AS sender,"
         "       CASE WHEN direction='outgoing' THEN number ELSE NULL END AS recipient,"
         "       NULL AS body, NULL AS thread_id,"
-        "       'call-' || id AS row_key"
+        "       printf('call-%020d', id) AS row_key,"
+        "       duration_s"
         " FROM call_logs WHERE case_id=:cid"
     )
 
@@ -103,10 +109,7 @@ def get_timeline(case_id):
             "risk_level": risk_map.get(r["platform"]),
         }
         if r["type"] == "call":
-            cl = db.execute(
-                "SELECT duration_s FROM call_logs WHERE id=?", (r["id"],)
-            ).fetchone()
-            item["duration_seconds"] = cl["duration_s"] if cl else None
+            item["duration_seconds"] = r["duration_s"]
         items.append(item)
 
     next_cursor = None
