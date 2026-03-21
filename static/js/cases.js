@@ -170,8 +170,9 @@ async function openCase(id) {
 
     // Stats
     _loadStats(id);
-    // Evidence list
+    // Evidence list + contacts
     _loadEvidence(id);
+    _loadContacts(id);
     // Report link
     if (btnReport) btnReport.href = `/api/cases/${id}/report`;
     if (btnReportPdf) {
@@ -201,12 +202,14 @@ async function _loadStats(caseId) {
   const el = document.getElementById("dash-stats");
   if (!el) return;
   try {
-    const [msgs, contacts, calls, analysis] = await Promise.all([
+    const [msgs, contactsList, calls, analysis] = await Promise.all([
       apiFetch(`/api/cases/${caseId}/messages/count`).catch(() => null),
-      apiFetch(`/api/cases/${caseId}/contacts/count`).catch(() => null),
+      apiFetch(`/api/cases/${caseId}/contacts`).catch(() => null),
       apiFetch(`/api/cases/${caseId}/calls/count`).catch(() => null),
       apiFetch(`/api/cases/${caseId}/analysis`).catch(() => null),
     ]);
+    const contacts = contactsList ? { count: contactsList.length } : null;
+    const recoveredCount = contactsList ? contactsList.filter(c => c.source === "recovered").length : 0;
     if (!msgs && !contacts && !calls && !analysis) {
       showToast("Failed to load case stats", "error");
       el.innerHTML = '<p class="muted">Could not load statistics.</p>';
@@ -214,12 +217,12 @@ async function _loadStats(caseId) {
     }
     const stats = [
       { label: "Messages", value: msgs ? (msgs.count ?? msgs.length ?? 0) : "—", icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>', color: "blue" },
-      { label: "Contacts", value: contacts ? (contacts.count ?? contacts.length ?? 0) : "—", icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', color: "green" },
+      { label: "Contacts", value: contacts ? (contacts.count ?? 0) : "—", icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', color: "green", tooltip: recoveredCount > 0 ? `${contacts.count} contacts (${recoveredCount} recovered from messaging data)` : null },
       { label: "Calls",    value: calls ? (calls.count ?? calls.length ?? 0) : "—", icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>', color: "orange" },
       { label: "Analyses", value: Array.isArray(analysis) ? analysis.length : "—", icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>', color: "purple" },
     ];
     el.innerHTML = stats.map(s => `
-      <div class="stat-card stat-card-${s.color}">
+      <div class="stat-card stat-card-${s.color}"${s.tooltip ? ` title="${s.tooltip}"` : ""}>
         <div class="stat-icon">${s.icon}</div>
         <div class="stat-value">${s.value}</div>
         <div class="stat-label">${s.label}</div>
@@ -514,6 +517,29 @@ async function _loadEvidence(caseId) {
   } catch (_) {
     el.innerHTML = '<p class="muted">Could not load evidence files.</p>';
     showToast("Failed to load evidence files", "error");
+  }
+}
+
+async function _loadContacts(caseId) {
+  const el = document.getElementById("contact-list");
+  if (!el) return;
+  try {
+    const contacts = await apiFetch(`/api/cases/${caseId}/contacts`);
+    if (!contacts.length) {
+      el.innerHTML = '<p class="muted">No contacts found.</p>';
+      return;
+    }
+    el.innerHTML = contacts.map(c => {
+      const name = (c.name || "—").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const phone = (c.phone || "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+      const recovered = c.source === "recovered";
+      return `<div class="contact-item">
+        <span class="contact-name">${name}${recovered ? ' <span class="contact-recovered">(recovered)</span>' : ""}</span>
+        ${phone ? `<span class="contact-phone">${phone}</span>` : ""}
+      </div>`;
+    }).join("");
+  } catch (_) {
+    el.innerHTML = '<p class="muted">Could not load contacts.</p>';
   }
 }
 

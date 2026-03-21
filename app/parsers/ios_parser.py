@@ -10,7 +10,6 @@ Apple Core Data epoch offset: 978307200 s (seconds since 2001-01-01).
 from __future__ import annotations
 
 import logging
-import sqlite3
 import tarfile
 import zipfile
 from datetime import datetime, timezone
@@ -198,17 +197,6 @@ class iOSParser(BaseParser):
         return extracted
 
     # ── DB readers ────────────────────────────────────────────────────────────
-
-    def _open_db(self, path: Path | None) -> sqlite3.Connection | None:
-        if not path or not path.exists():
-            return None
-        try:
-            conn = sqlite3.connect(path)
-            conn.row_factory = sqlite3.Row
-            return conn
-        except Exception as exc:
-            logger.warning("Cannot open %s: %s", path, exc)
-            return None
 
     def _read_device_info(self, db_paths: dict) -> dict[str, Any]:
         info: dict[str, Any] = {"platform": "ios"}
