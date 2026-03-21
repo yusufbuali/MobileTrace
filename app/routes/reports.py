@@ -14,13 +14,11 @@ from app.routes.analysis import _safe_json_parse
 bp_reports = Blueprint("reports", __name__, url_prefix="/api")
 
 
-@bp_reports.get("/cases/<case_id>/report")
-def get_report(case_id: str):
-    """Render a court-ready HTML report for the case."""
-    db = get_db()
+def _build_report_context(db, case_id: str) -> dict | None:
+    """Build the full Jinja2 context for the case report. Returns None if case not found."""
     case = db.execute("SELECT * FROM cases WHERE id=?", (case_id,)).fetchone()
     if not case:
-        return jsonify({"error": "not found"}), 404
+        return None
 
     case_dict = dict(case)
     try:
@@ -63,28 +61,7 @@ def get_report(case_id: str):
         (case_id,),
     ).fetchall()
 
-    annotation_rows = db.execute(
-        """
-        SELECT a.id, a.tag, a.note, a.created_at,
-               m.platform, m.thread_id, m.body, m.timestamp, m.direction, m.sender
-        FROM annotations a
-        JOIN messages m ON a.message_id = m.id
-        WHERE a.case_id = ?
-        ORDER BY
-            CASE a.tag
-                WHEN 'KEY_EVIDENCE' THEN 1
-                WHEN 'SUSPICIOUS'   THEN 2
-                WHEN 'ALIBI'        THEN 3
-                WHEN 'EXCULPATORY'  THEN 4
-                ELSE 5
-            END,
-            m.timestamp ASC
-        """,
-        (case_id,),
-    ).fetchall()
-    annotations = [dict(r) for r in annotation_rows]
-
-    # Build executive summary from analysis results
+    # Executive summary
     _summary_parts = []
     for a in analysis:
         p = a.get("result_parsed") or {}
@@ -97,23 +74,19 @@ def get_report(case_id: str):
                 _summary_parts.append(f"**{a['artifact_key'].title()}:** {snippet}")
     executive_summary = "\n\n".join(_summary_parts)
 
-    # Build conversation excerpts: top 5 threads per platform, last 25 messages each
+    # Conversation excerpts
     _EXCERPT_PLATFORMS = ["whatsapp", "telegram", "signal", "sms"]
     _THREADS_PER_PLATFORM = 5
     _MSGS_PER_THREAD = 25
-
     conversation_excerpts = []
     for platform in _EXCERPT_PLATFORMS:
         thread_rows = db.execute(
             """
             SELECT COALESCE(thread_id, sender, recipient) AS thread,
-                   COUNT(*) AS cnt,
-                   MAX(timestamp) AS last_ts
+                   COUNT(*) AS cnt, MAX(timestamp) AS last_ts
             FROM messages
             WHERE case_id=? AND platform=?
-            GROUP BY thread
-            ORDER BY cnt DESC
-            LIMIT ?
+            GROUP BY thread ORDER BY cnt DESC LIMIT ?
             """,
             (case_id, platform, _THREADS_PER_PLATFORM),
         ).fetchall()
@@ -128,47 +101,39 @@ def get_report(case_id: str):
                 FROM messages
                 WHERE case_id=? AND platform=?
                   AND COALESCE(thread_id, sender, recipient) = ?
-                ORDER BY timestamp DESC
-                LIMIT ?
+                ORDER BY timestamp DESC LIMIT ?
                 """,
                 (case_id, platform, thread_id, _MSGS_PER_THREAD),
             ).fetchall()
-            msgs_reversed = list(reversed([dict(r) for r in msg_rows]))
             threads.append({
                 "thread_id": thread_id,
                 "message_count": tr["cnt"],
-                "messages": msgs_reversed,
+                "messages": list(reversed([dict(r) for r in msg_rows])),
             })
-        conversation_excerpts.append({
-            "platform": platform,
-            "threads": threads,
-        })
+        conversation_excerpts.append({"platform": platform, "threads": threads})
 
-    # Compute per-artifact DB stats for enhanced display
+    # Per-artifact enhanced stats
     _CONFIDENCE_RE = _re.compile(r'\b(CRITICAL|HIGH|MEDIUM|LOW)\b', _re.IGNORECASE)
     per_artifact_enhanced = []
     for a in analysis:
         p = a.get("result_parsed") or {}
         artifact_key = a["artifact_key"]
-
         if artifact_key in ("sms", "whatsapp", "telegram", "signal"):
             count_row = db.execute(
                 "SELECT COUNT(*) AS cnt FROM messages WHERE case_id=? AND platform=?",
                 (case_id, artifact_key),
             ).fetchone()
-            record_count = count_row["cnt"] if count_row else 0
         elif artifact_key == "call_logs":
             count_row = db.execute(
                 "SELECT COUNT(*) AS cnt FROM call_logs WHERE case_id=?", (case_id,)
             ).fetchone()
-            record_count = count_row["cnt"] if count_row else 0
         elif artifact_key == "contacts":
             count_row = db.execute(
                 "SELECT COUNT(*) AS cnt FROM contacts WHERE case_id=?", (case_id,)
             ).fetchone()
-            record_count = count_row["cnt"] if count_row else 0
         else:
-            record_count = 0
+            count_row = None
+        record_count = count_row["cnt"] if count_row else 0
 
         if artifact_key in ("sms", "whatsapp", "telegram", "signal"):
             ts_row = db.execute(
@@ -187,18 +152,15 @@ def get_report(case_id: str):
         time_start = (ts_row["ts_min"] or "N/A") if ts_row else "N/A"
         time_end = (ts_row["ts_max"] or "N/A") if ts_row else "N/A"
 
-        explicit_conf = p.get("confidence") or p.get("confidence_level") or ""
         result_text = a.get("result") or ""
+        explicit_conf = p.get("confidence") or p.get("confidence_level") or ""
         if explicit_conf:
             conf_label = explicit_conf.strip().upper()
         else:
             m = _CONFIDENCE_RE.search(result_text)
             conf_label = m.group(1).upper() if m else "UNSPECIFIED"
-        conf_class_map = {
-            "CRITICAL": "risk-CRITICAL", "HIGH": "risk-HIGH",
-            "MEDIUM": "risk-MEDIUM", "LOW": "risk-LOW",
-        }
-        conf_class = conf_class_map.get(conf_label, "")
+        conf_class = {"CRITICAL": "risk-CRITICAL", "HIGH": "risk-HIGH",
+                      "MEDIUM": "risk-MEDIUM", "LOW": "risk-LOW"}.get(conf_label, "")
 
         per_artifact_enhanced.append({
             **a,
@@ -209,16 +171,35 @@ def get_report(case_id: str):
             "confidence_class": conf_class,
         })
 
+    # Annotations
+    try:
+        annotation_rows = db.execute(
+            """
+            SELECT a.id, a.tag, a.note, a.created_at,
+                   m.platform, m.thread_id, m.body, m.timestamp, m.direction, m.sender
+            FROM annotations a
+            JOIN messages m ON a.message_id = m.id
+            WHERE a.case_id = ?
+            ORDER BY
+                CASE a.tag WHEN 'KEY_EVIDENCE' THEN 1 WHEN 'SUSPICIOUS' THEN 2
+                           WHEN 'ALIBI' THEN 3 WHEN 'EXCULPATORY' THEN 4 ELSE 5 END,
+                m.timestamp ASC
+            """,
+            (case_id,),
+        ).fetchall()
+        annotations = [dict(r) for r in annotation_rows]
+    except Exception:
+        annotations = []
+
     stats = {
         "messages": len(messages),
         "contacts": len(contacts),
         "calls": len(calls),
         "analyses": len(analysis),
     }
-
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
-    ctx = augment_report_context(
+    return augment_report_context(
         {
             "case": case_dict,
             "messages": [dict(r) for r in messages],
@@ -226,14 +207,23 @@ def get_report(case_id: str):
             "calls": [dict(r) for r in calls],
             "analysis": per_artifact_enhanced,
             "evidence_files": [dict(r) for r in evidence_files],
-            "annotations": annotations,
             "executive_summary": executive_summary,
             "conversation_excerpts": conversation_excerpts,
+            "annotations": annotations,
             "stats": stats,
             "generated_at": generated_at,
         },
         case_name=case_dict.get("title", ""),
     )
+
+
+@bp_reports.get("/cases/<case_id>/report")
+def get_report(case_id: str):
+    """Render a court-ready HTML report for the case."""
+    db = get_db()
+    ctx = _build_report_context(db, case_id)
+    if ctx is None:
+        return jsonify({"error": "not found"}), 404
     return render_template("report.html", **ctx)
 
 

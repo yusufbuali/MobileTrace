@@ -172,3 +172,17 @@ def test_report_includes_annotated_evidence_section(client):
     assert "Annotated Evidence" in html
     assert "KEY EVIDENCE" in html or "KEY_EVIDENCE" in html
     assert "Critical" in html
+
+
+def test_build_report_context_returns_dict(populated_case, client):
+    """_build_report_context returns a dict with expected top-level keys."""
+    from app.routes.reports import _build_report_context
+    from app.database import get_db
+    case_id = populated_case  # fixture returns case_id string
+    with client.application.app_context():
+        db = get_db()
+        ctx = _build_report_context(db, case_id)
+    for key in ("case", "messages", "contacts", "calls", "analysis",
+                "evidence_files", "executive_summary", "conversation_excerpts",
+                "stats", "generated_at"):
+        assert key in ctx, f"missing key: {key}"
