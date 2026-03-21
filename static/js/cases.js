@@ -14,6 +14,7 @@ const btnCancel = document.getElementById("btn-cancel-case");
 const formNewCase = document.getElementById("form-new-case");
 const btnAnalyze = document.getElementById("btn-analyze");
 const btnReport = document.getElementById("btn-report");
+const btnReportPdf = document.getElementById("btn-report-pdf");
 const formUpload = document.getElementById("form-upload-evidence");
 const formPath = document.getElementById("form-path-evidence");
 
@@ -168,6 +169,11 @@ async function openCase(id) {
     _loadEvidence(id);
     // Report link
     if (btnReport) btnReport.href = `/api/cases/${id}/report`;
+    const btnPdf = document.getElementById("btn-report-pdf");
+    if (btnPdf) {
+      btnPdf.href = `/api/cases/${id}/report/pdf`;
+      btnPdf.style.display = "";
+    }
     // Chat
     initChat(id);
     // Refresh conversations if that tab is already active
