@@ -99,6 +99,38 @@ def test_private_ip_excluded():
     assert len(ips) == 0
 
 
+def test_invalid_ip_octet_excluded():
+    """IPs with out-of-range octets (e.g. 256.x.x.x) must not be emitted as IP IOCs."""
+    msgs = [{"id": "1", "body": "Server at 256.1.2.3 and 999.999.999.999",
+             "platform": "sms", "thread_id": "t1", "timestamp": "2024-01-01"}]
+    result = extract_iocs(msgs, [])
+    ips = [i for i in result["iocs"] if i["type"] == "ip"]
+    assert ips == []
+
+
+def test_private_ip_ranges():
+    """Loopback, link-local, and 172.16-31 ranges must all be excluded as IP IOCs."""
+    addrs = ["127.0.0.1", "169.254.1.1", "172.16.0.1", "172.31.255.255"]
+    for addr in addrs:
+        msgs = [{"id": "1", "body": f"connect to {addr}",
+                 "platform": "sms", "thread_id": "t1", "timestamp": "2024-01-01"}]
+        result = extract_iocs(msgs, [])
+        ips = [i for i in result["iocs"] if i["type"] == "ip"]
+        assert ips == [], f"{addr} should be filtered as private"
+
+
+def test_private_ip_boundary():
+    """172.15.x.x is NOT private; 172.16.x.x IS private."""
+    public_msg = [{"id": "1", "body": "host 172.15.0.1",
+                   "platform": "sms", "thread_id": "t1", "timestamp": "2024-01-01"}]
+    private_msg = [{"id": "2", "body": "host 172.16.0.1",
+                    "platform": "sms", "thread_id": "t1", "timestamp": "2024-01-01"}]
+    public_ips = [i for i in extract_iocs(public_msg, [])["iocs"] if i["type"] == "ip"]
+    private_ips = [i for i in extract_iocs(private_msg, [])["iocs"] if i["type"] == "ip"]
+    assert len(public_ips) == 1, "172.15.x should be public"
+    assert private_ips == [], "172.16.x should be private"
+
+
 # ── Coords ───────────────────────────────────────────────────────────────────
 
 def test_coords_extracted():

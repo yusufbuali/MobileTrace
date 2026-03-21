@@ -45,14 +45,17 @@ def _normalise_phone(raw: str) -> str:
 
 
 def _is_private_ip(ip: str) -> bool:
-    """Return True for RFC-1918, loopback, and link-local addresses."""
+    """Return True for RFC-1918, loopback, link-local, and invalid (out-of-range) addresses."""
     parts = ip.split(".")
     if len(parts) != 4:
         return False
     try:
-        o1, o2 = int(parts[0]), int(parts[1])
+        octets = [int(p) for p in parts]
     except ValueError:
         return False
+    if not all(0 <= o <= 255 for o in octets):
+        return True  # reject out-of-range as non-routable
+    o1, o2 = octets[0], octets[1]
     return (
         o1 == 10
         or (o1 == 172 and 16 <= o2 <= 31)
