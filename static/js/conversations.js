@@ -9,12 +9,14 @@ let _threads = [];
 let _activePlatform = null;  // null = all platforms
 let _searchTimer = null;
 let _annotations = new Map(); // message_id (number) → annotation object
+let _lightboxInited = false;
 
 function dom(id) { return document.getElementById(id); }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export async function initConversations(caseId) {
+  if (!_lightboxInited) { _initLightbox(); _lightboxInited = true; }
   clearTimeout(_searchTimer);
   if (!caseId) {
     _showNoCaseState();
@@ -256,6 +258,7 @@ function _renderMessages(rows, container, showOrigin) {
     container.appendChild(_renderBubble(msg, showOrigin));
   });
   container.scrollTop = container.scrollHeight;
+  _lazyLoadImages(container);
 }
 
 function _renderBubble(msg, showOrigin) {
@@ -307,6 +310,7 @@ function _renderBubble(msg, showOrigin) {
   ts.textContent = `${senderLabel}${_fmtDate(msg.timestamp)}`;
 
   content.appendChild(bubble);
+  _renderMediaThumb(msg, _caseId, bubble);
   content.appendChild(ts);
   wrap.appendChild(content);
 
@@ -496,6 +500,92 @@ async function _search(q) {
   } catch (err) {
     msgs.innerHTML = `<p class="muted" style="padding:8px">Search error: ${_escHtml(err.message)}</p>`;
   }
+}
+
+// ── Media thumbnail helpers (A4) ──────────────────────────────────────────
+
+function _fmtBytes(b) {
+  if (b > 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
+  if (b > 1024) return `${(b / 1024).toFixed(0)} KB`;
+  return `${b} B`;
+}
+
+function _renderMediaThumb(msg, caseId, container) {
+  if (!msg.media_id) return;
+  const url    = `/api/cases/${caseId}/media/${msg.media_id}`;
+  const mime   = msg.mime_type || "";
+  const fname  = msg.media_filename || "attachment";
+  const size   = msg.media_size ? ` · ${_fmtBytes(msg.media_size)}` : "";
+
+  const wrap = document.createElement("div");
+  wrap.className = "msg-media-wrap";
+
+  if (mime.startsWith("image/")) {
+    const img = document.createElement("img");
+    img.className = "msg-media-thumb";
+    img.alt = fname;
+    img.dataset.src = url;        // lazy — set by IntersectionObserver
+    img.dataset.mediaName = fname;
+    img.dataset.mediaType = "image";
+    wrap.appendChild(img);
+  } else if (mime.startsWith("video/")) {
+    const vid = document.createElement("div");
+    vid.className = "msg-media-video";
+    vid.textContent = "▶";
+    vid.dataset.src = url;
+    vid.dataset.mediaName = fname;
+    vid.dataset.mediaType = "video";
+    wrap.appendChild(vid);
+  }
+
+  const meta = document.createElement("div");
+  meta.className = "msg-media-meta";
+  meta.textContent = `${mime.startsWith("image/") ? "🖼" : "📹"} ${fname}${size}`;
+  wrap.appendChild(meta);
+
+  container.appendChild(wrap);
+}
+
+function _openLightbox(url, name, type) {
+  const dlg     = document.getElementById("media-lightbox");
+  const content = document.getElementById("media-lightbox-content");
+  const metaEl  = document.getElementById("media-lightbox-meta");
+  content.innerHTML = type === "video"
+    ? `<video src="${url}" controls autoplay></video>`
+    : `<img src="${url}" alt="" />`;
+  metaEl.textContent = name;
+  dlg.showModal();
+}
+
+function _initLightbox() {
+  const dlg = document.getElementById("media-lightbox");
+  if (!dlg) return;
+  dlg.querySelector(".media-lightbox-close").addEventListener("click", () => dlg.close());
+  dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); });
+}
+
+function _lazyLoadImages(container) {
+  const els = container.querySelectorAll("[data-src]");
+  if (!els.length) return;
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      const el = e.target;
+      const url  = el.dataset.src;
+      const name = el.dataset.mediaName || "";
+      const type = el.dataset.mediaType || "image";
+      if (el.tagName === "IMG") {
+        el.src = url;
+        el.addEventListener("click", () => _openLightbox(url, name, "image"));
+      } else {
+        // video placeholder div
+        el.addEventListener("click", () => _openLightbox(url, name, "video"));
+      }
+      el.removeAttribute("data-src");
+      obs.unobserve(el);
+    });
+  }, { rootMargin: "200px" });
+  els.forEach(el => obs.observe(el));
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────

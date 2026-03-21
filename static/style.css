@@ -1608,4 +1608,28 @@ button[type="button"] { background: var(--surface2); color: var(--text); border:
 .tl-body--truncated:hover { color:var(--text); }
 .tl-risk-badge { font-size:0.7rem; padding:1px 5px; border-radius:3px; flex-shrink:0;
   background:rgba(248,81,73,0.1); color:#f85149; }
+
+/* ── Media Thumbnails (A4) ─────────────────────────────────────────────── */
+.msg-media-wrap { margin-top:6px; }
+.msg-media-thumb { display:block; width:140px; height:90px; object-fit:cover;
+  border-radius:4px; cursor:pointer; background:var(--surface2);
+  border:1px solid var(--border); }
+.msg-media-video { width:140px; height:90px; background:var(--surface2);
+  border:1px solid var(--border); border-radius:4px; display:flex;
+  align-items:center; justify-content:center; font-size:1.4rem; cursor:pointer; }
+.msg-media-meta { font-size:0.75rem; color:var(--text-muted); margin-top:3px; }
+
+/* Lightbox */
+.media-lightbox { border:none; border-radius:8px; background:var(--surface);
+  max-width:90vw; max-height:90vh; padding:0;
+  box-shadow:0 8px 40px rgba(0,0,0,.5); }
+.media-lightbox::backdrop { background:rgba(0,0,0,.75); }
+.media-lightbox-inner { position:relative; padding:16px; }
+.media-lightbox-close { position:absolute; top:8px; right:12px; background:none;
+  border:none; font-size:1.4rem; cursor:pointer; color:var(--text-muted); }
+.media-lightbox-close:hover { color:var(--text); }
+#media-lightbox-content img,
+#media-lightbox-content video { max-width:80vw; max-height:75vh; display:block;
+  border-radius:4px; }
+.media-lightbox-meta { font-size:0.8rem; color:var(--text-muted); margin-top:8px; }
 .tl-empty  { color:var(--text-muted); text-align:center; padding:40px 0; font-size:0.9rem; }
