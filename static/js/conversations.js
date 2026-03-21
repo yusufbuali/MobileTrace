@@ -14,6 +14,7 @@ function dom(id) { return document.getElementById(id); }
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export function initConversations(caseId) {
+  clearTimeout(_searchTimer);
   if (!caseId) {
     _showNoCaseState();
     return;
@@ -150,7 +151,10 @@ function _renderThreadList(threads) {
     item.innerHTML = `
       <div class="conv-thread-platform">${_escHtml(t.platform || "")}</div>
       <div class="conv-thread-name">${_escHtml(t.thread || "(unknown)")}</div>
-      <div class="conv-thread-meta">${t.message_count} msg${t.message_count !== 1 ? "s" : ""} · ${_fmtDate(t.last_ts)}</div>
+      <div class="conv-thread-meta">
+        ${_fmtDate(t.last_ts)}
+        ${t.message_count != null ? `<span class="conv-thread-count">${t.message_count}</span>` : ""}
+      </div>
     `;
     item.addEventListener("click", () => {
       container.querySelectorAll(".conv-thread-item").forEach(el => el.classList.remove("active"));
@@ -201,13 +205,38 @@ async function _openThread(platform, thread, messageCount) {
   }
 }
 
+function _extractDate(ts) {
+  if (!ts) return null;
+  try { return new Date(ts).toDateString(); } catch (_) { return null; }
+}
+
+function _fmtDateLabel(dateStr) {
+  const d = new Date(dateStr);
+  const today = new Date().toDateString();
+  const yesterday = new Date(Date.now() - 86400000).toDateString();
+  if (dateStr === today) return "Today";
+  if (dateStr === yesterday) return "Yesterday";
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+}
+
 function _renderMessages(rows, container, showOrigin) {
   container.innerHTML = "";
   if (!rows.length) {
     container.innerHTML = '<p class="muted" style="padding:8px">No messages found.</p>';
     return;
   }
-  rows.forEach(msg => container.appendChild(_renderBubble(msg, showOrigin)));
+  let lastDate = null;
+  rows.forEach(msg => {
+    const msgDate = _extractDate(msg.timestamp);
+    if (msgDate && msgDate !== lastDate) {
+      const sep = document.createElement("div");
+      sep.className = "conv-date-sep";
+      sep.textContent = _fmtDateLabel(msgDate);
+      container.appendChild(sep);
+      lastDate = msgDate;
+    }
+    container.appendChild(_renderBubble(msg, showOrigin));
+  });
   container.scrollTop = container.scrollHeight;
 }
 

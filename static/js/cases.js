@@ -1,7 +1,9 @@
 import { api, apiFetch } from "./api.js";
-import { initChat, triggerAnalysis, loadAnalysisResults, loadAnalysisPreview } from "./chat.js";
+import { initChat, triggerAnalysis, loadAnalysisResults, loadAnalysisPreview, loadAnalysisTab, openMultiModelModal } from "./chat.js";
 import { initConversations } from "./conversations.js";
 import { showToast } from "./toast.js";
+import { initDashboard } from "./dashboard.js";
+import { initCorrelation } from "./correlation.js";
 
 const caseList = document.getElementById("case-list");
 const searchInput = document.getElementById("search-cases");
@@ -49,7 +51,10 @@ function renderCases(cases) {
              aria-pressed="${c.id === activeCaseId ? "true" : "false"}"
              tabindex="0">
           <div class="case-title">${c.title}</div>
-          <div class="case-meta">${c.officer || "&mdash;"}</div>
+          <div class="case-meta-row">
+            <span class="case-meta">${c.officer || "&mdash;"}</span>
+            ${c.risk_level ? `<span class="case-risk-badge risk-${c.risk_level}">${c.risk_level}</span>` : ""}
+          </div>
         </div>
       `).join("")}
     </details>
@@ -97,13 +102,17 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.setAttribute("aria-selected", "true");
     const target = document.getElementById(btn.dataset.tab);
     if (target) target.classList.add("active");
-    // Load analysis preview when switching to analysis tab
+    // Load analysis tab when switching to analysis tab
     if (btn.dataset.tab === "tab-analysis" && activeCaseId) {
-      loadAnalysisPreview(activeCaseId);
+      loadAnalysisTab(activeCaseId);
     }
     // Load conversations when switching to conversations tab
     if (btn.dataset.tab === "tab-conversations") {
       initConversations(activeCaseId);
+    }
+    // Load correlation graph when switching to correlation tab
+    if (btn.dataset.tab === "tab-correlation" && activeCaseId) {
+      initCorrelation(activeCaseId);
     }
   });
 });
@@ -123,7 +132,10 @@ async function openCase(id) {
       `${c.officer || ""} &middot; ${statusBadge(c.status)}`;
 
     // Device info
-    const di = typeof c.device_info === "string" ? JSON.parse(c.device_info || "{}") : (c.device_info || {});
+    let di = {};
+    try {
+      di = typeof c.device_info === "string" ? JSON.parse(c.device_info || "{}") : (c.device_info || {});
+    } catch (_) { di = {}; }
     const diEl = document.getElementById("dash-device-info");
     if (Object.keys(di).length) {
       diEl.innerHTML = `
@@ -167,16 +179,21 @@ async function _loadStats(caseId) {
   if (!el) return;
   try {
     const [msgs, contacts, calls, analysis] = await Promise.all([
-      apiFetch(`/api/cases/${caseId}/messages/count`).catch(() => ({ count: 0 })),
-      apiFetch(`/api/cases/${caseId}/contacts/count`).catch(() => ({ count: 0 })),
-      apiFetch(`/api/cases/${caseId}/calls/count`).catch(() => ({ count: 0 })),
-      apiFetch(`/api/cases/${caseId}/analysis`).catch(() => []),
+      apiFetch(`/api/cases/${caseId}/messages/count`).catch(() => null),
+      apiFetch(`/api/cases/${caseId}/contacts/count`).catch(() => null),
+      apiFetch(`/api/cases/${caseId}/calls/count`).catch(() => null),
+      apiFetch(`/api/cases/${caseId}/analysis`).catch(() => null),
     ]);
+    if (!msgs && !contacts && !calls && !analysis) {
+      showToast("Failed to load case stats", "error");
+      el.innerHTML = '<p class="muted">Could not load statistics.</p>';
+      return;
+    }
     const stats = [
-      { label: "Messages", value: msgs.count ?? msgs.length ?? 0, icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>', color: "blue" },
-      { label: "Contacts", value: contacts.count ?? contacts.length ?? 0, icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', color: "green" },
-      { label: "Calls",    value: calls.count ?? calls.length ?? 0, icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>', color: "orange" },
-      { label: "Analyses", value: Array.isArray(analysis) ? analysis.length : 0, icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>', color: "purple" },
+      { label: "Messages", value: msgs ? (msgs.count ?? msgs.length ?? 0) : "—", icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>', color: "blue" },
+      { label: "Contacts", value: contacts ? (contacts.count ?? contacts.length ?? 0) : "—", icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>', color: "green" },
+      { label: "Calls",    value: calls ? (calls.count ?? calls.length ?? 0) : "—", icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>', color: "orange" },
+      { label: "Analyses", value: Array.isArray(analysis) ? analysis.length : "—", icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>', color: "purple" },
     ];
     el.innerHTML = stats.map(s => `
       <div class="stat-card stat-card-${s.color}">
@@ -186,6 +203,10 @@ async function _loadStats(caseId) {
       </div>`).join("");
     // Sparkline — message volume by day
     _loadSparkline(caseId);
+    // Platform breakdown
+    _loadPlatforms(caseId);
+    // Intelligence dashboard widgets
+    _loadAnalysisSummary(caseId);
   } catch (_) { /* stats not critical */ }
 }
 
@@ -227,6 +248,197 @@ async function _loadSparkline(caseId) {
   } catch (_) { /* sparkline not critical */ }
 }
 
+// ── Platform icons ────────────────────────────────────────────────────────────
+
+const _platformIcons = {
+  whatsapp: '<svg class="plat-icon" viewBox="0 0 16 16" width="16" height="16"><path d="M8 1C4.13 1 1 4.13 1 8c0 1.23.32 2.39.88 3.39L1 15l3.71-.87C5.66 14.68 6.8 15 8 15c3.87 0 7-3.13 7-7s-3.13-7-7-7zm3.44 9.76c-.15.42-.87.8-1.2.85-.33.05-.75.08-1.21-.08a8.7 8.7 0 0 1-1.1-.45c-1.93-.93-3.19-2.89-3.29-3.03-.1-.13-.78-1.04-.78-1.98s.49-1.41.67-1.6c.18-.19.39-.24.52-.24h.38c.12 0 .28-.05.44.34.17.39.56 1.38.61 1.48s.08.21.02.34c-.07.13-.1.21-.2.33-.1.11-.2.25-.29.34-.1.1-.2.2-.09.39.11.2.51.84 1.1 1.36.76.67 1.39.88 1.59.98s.31.08.43-.05c.11-.13.49-.57.62-.77s.26-.16.44-.1c.18.07 1.12.53 1.31.63.19.1.32.14.36.22.05.08.05.46-.1.88z" fill="currentColor"/></svg>',
+  telegram: '<svg class="plat-icon" viewBox="0 0 16 16" width="16" height="16"><path d="M14.05 2.43L1.55 7.18c-.85.34-.84.82-.16 1.03l3.2 1 1.24 3.78c.15.42.08.59.55.59.36 0 .52-.16.72-.36l1.73-1.68 3.6 2.66c.66.37 1.14.18 1.3-.61l2.36-11.13c.24-.97-.37-1.41-1.04-1.1zM5.75 9.5l-.37 3.44-.02.01L4.75 10l6.5-4.1c.3-.18.58-.08.35.12L5.75 9.5z" fill="currentColor"/></svg>',
+  signal: '<svg class="plat-icon" viewBox="0 0 16 16" width="16" height="16"><path d="M8 1L2 3.5v4c0 3.7 2.6 7.2 6 8.5 3.4-1.3 6-4.8 6-8.5v-4L8 1zm0 2.2l4 1.7v3.6c0 2.8-1.9 5.5-4 6.6-2.1-1.1-4-3.8-4-6.6V4.9l4-1.7z" fill="currentColor"/><circle cx="8" cy="7.8" r="1.8" fill="currentColor"/></svg>',
+  sms: '<svg class="plat-icon" viewBox="0 0 16 16" width="16" height="16"><path d="M2.5 2A1.5 1.5 0 0 0 1 3.5v7A1.5 1.5 0 0 0 2.5 12H4v2.5L7.5 12h6A1.5 1.5 0 0 0 15 10.5v-7A1.5 1.5 0 0 0 13.5 2h-11z" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="5" cy="7" r=".9" fill="currentColor"/><circle cx="8" cy="7" r=".9" fill="currentColor"/><circle cx="11" cy="7" r=".9" fill="currentColor"/></svg>',
+};
+
+function _platformIcon(platform) {
+  const key = (platform || "").toLowerCase();
+  return _platformIcons[key] || _platformIcons.sms;
+}
+
+function _platformDisplayName(platform) {
+  const names = { whatsapp: "WhatsApp", telegram: "Telegram", signal: "Signal", sms: "SMS" };
+  return names[(platform || "").toLowerCase()] || platform || "Unknown";
+}
+
+async function _loadPlatforms(caseId) {
+  const el = document.getElementById("dash-platforms");
+  if (!el) return;
+  try {
+    const threads = await apiFetch(`/api/cases/${caseId}/threads`);
+    if (!threads.length) { el.innerHTML = ""; return; }
+    const grouped = {};
+    threads.forEach(t => {
+      const p = (t.platform || "sms").toLowerCase();
+      if (!grouped[p]) grouped[p] = { count: 0, threads: 0 };
+      grouped[p].count += t.message_count || 0;
+      grouped[p].threads++;
+    });
+    el.innerHTML = Object.entries(grouped).map(([p, d]) =>
+      `<div class="plat-chip plat-chip-${p}">
+        ${_platformIcon(p)}
+        <span class="plat-chip-name">${_platformDisplayName(p)}</span>
+        <span class="plat-chip-stat">${d.count.toLocaleString()} msgs &middot; ${d.threads} thread${d.threads !== 1 ? "s" : ""}</span>
+      </div>`
+    ).join("");
+  } catch (_) { el.innerHTML = ""; }
+}
+
+function _artifactLabel(key) {
+  const labels = {
+    sms: "SMS", whatsapp: "WhatsApp", telegram: "Telegram",
+    signal: "Signal", call_log: "Call Log", call_logs: "Call Logs", contacts: "Contacts",
+  };
+  return labels[(key || "").toLowerCase()] || key || "Unknown";
+}
+
+function _crimeCatLabel(cat) {
+  return (cat || "").replace(/_/g, " ").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+}
+
+async function _loadAnalysisSummary(caseId) {
+  const banner     = document.getElementById("dash-intel-banner");
+  const crimeCats  = document.getElementById("dash-crime-cats");
+  const topThreads = document.getElementById("dash-top-threads");
+  const coverage   = document.getElementById("dash-coverage");
+  if (!banner) return;
+
+  let data;
+  try {
+    data = await apiFetch(`/api/cases/${caseId}/analysis/summary`);
+  } catch (_) {
+    banner.innerHTML = '<span class="dash-intel-placeholder">Analysis summary unavailable.</span>';
+    showToast("Could not load analysis summary", "error");
+    return;
+  }
+
+  // No analysis yet
+  if (!data.has_analysis) {
+    banner.setAttribute("data-risk", "NONE");
+    banner.innerHTML = `
+      <div class="dash-risk-block">
+        <span class="dash-risk-level risk-NONE">—</span>
+        <span class="dash-risk-label">Case Risk Level</span>
+      </div>
+      <div class="dash-intel-divider"></div>
+      <span class="dash-intel-placeholder">No analysis has been run yet. Use "Run Analysis" to generate intelligence findings.</span>`;
+    return;
+  }
+
+  const risk = (data.overall_risk_level || "NONE").toUpperCase();
+  const chipArtifacts = data.artifacts_analyzed.length;
+  const chipCrimes    = (data.crime_categories || []).length;
+  const chipHighRisk  = (data.top_risk_threads || []).filter(t => t.risk_score >= 7).length;
+
+  // Widget 1: Intelligence Banner
+  banner.setAttribute("data-risk", risk);
+  banner.innerHTML = `
+    <div class="dash-risk-block">
+      <span class="dash-risk-level risk-${risk}">${risk}</span>
+      <span class="dash-risk-label">Case Risk Level</span>
+    </div>
+    <div class="dash-intel-divider"></div>
+    <div class="dash-intel-chips">
+      <span class="dash-intel-chip"><strong>${chipArtifacts}</strong>&nbsp;artifact${chipArtifacts !== 1 ? "s" : ""} analyzed</span>
+      <span class="dash-intel-chip"><strong>${chipCrimes}</strong>&nbsp;crime ${chipCrimes !== 1 ? "categories" : "category"} detected</span>
+      <span class="dash-intel-chip"><strong>${chipHighRisk}</strong>&nbsp;high-risk thread${chipHighRisk !== 1 ? "s" : ""}</span>
+    </div>`;
+
+  // Widget 2: Crime Categories
+  const cats = [...(data.crime_categories || [])];
+  if (cats.length && crimeCats) {
+    const sevRank = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+    cats.sort((a, b) => (sevRank[b.severity] || 0) - (sevRank[a.severity] || 0));
+    crimeCats.innerHTML = `
+      <div class="analysis-section-label">Detected Crime Categories</div>
+      <div class="crime-cat-grid">
+        ${cats.map(c => `
+          <span class="crime-cat-chip sev-${(c.severity || "LOW").toUpperCase()}">
+            ${_crimeCatLabel(c.category)}
+            <span class="confidence-inline confidence-${(c.confidence || "low").toLowerCase()}">${c.confidence || "LOW"}</span>
+          </span>`).join("")}
+      </div>`;
+    crimeCats.style.display = "";
+  }
+
+  // Widget 3: High-Risk Threads (risk_score >= 5)
+  const threads = (data.top_risk_threads || []).filter(t => t.risk_score >= 5);
+  if (threads.length && topThreads) {
+    topThreads.innerHTML = `
+      <div class="analysis-section-label">High-Risk Contacts / Threads</div>
+      <div class="dash-thread-list">
+        ${threads.map(t => {
+          const score = Math.round(t.risk_score);
+          const scoreClass = score >= 8 ? "score-high" : score >= 5 ? "score-medium" : "score-low";
+          const platKey = (t.artifact || "sms").toLowerCase();
+          const indicators = (t.indicators || []).slice(0, 2);
+          return `
+            <div class="dash-thread-card">
+              <div class="dash-thread-header">
+                <span class="dash-thread-id">${t.thread_id || "Unknown"}</span>
+                <span class="dash-thread-plat plat-${platKey}">${_artifactLabel(t.artifact)}</span>
+                <span class="risk-score-num">${score}/10</span>
+              </div>
+              <div class="risk-bar-wrap">
+                <div class="risk-bar-track">
+                  <div class="risk-bar-fill ${scoreClass}" style="width:${score * 10}%"></div>
+                </div>
+              </div>
+              ${indicators.length ? `<ul class="dash-thread-indicators">${indicators.map(i => `<li>${i}</li>`).join("")}</ul>` : ""}
+            </div>`;
+        }).join("")}
+      </div>`;
+    topThreads.style.display = "";
+  }
+
+  // Widget 4: Data Coverage
+  const covRows = data.data_coverage || [];
+  if (covRows.length && coverage) {
+    coverage.innerHTML = `
+      <div class="analysis-section-label">Analysis Coverage</div>
+      <div class="coverage-grid">
+        ${covRows.map(c => {
+          const pct = Math.min(100, Math.round(c.coverage_percent || 0));
+          return `
+            <div class="coverage-row">
+              <span class="coverage-label">${_artifactLabel(c.artifact)}</span>
+              <div class="coverage-bar-track">
+                <div class="coverage-bar-fill" style="width:${pct}%"></div>
+              </div>
+              <span class="coverage-count">${(c.records_analyzed||0).toLocaleString()} / ${(c.total_records||0).toLocaleString()}</span>
+              <span class="coverage-pct">${pct}%</span>
+            </div>`;
+        }).join("")}
+      </div>`;
+    coverage.style.display = "";
+  }
+}
+
+function _formatLabel(format) {
+  const labels = {
+    ufdr: "Cellebrite UFDR",
+    xry: "XRY Export",
+    oxygen: "Oxygen Forensic",
+    ios_fs: "iOS File System",
+    android_tar: "Android Backup",
+    folder_android: "Android (Folder)",
+    folder_ios: "iOS (Folder)",
+  };
+  return labels[format] || format || "Unknown";
+}
+
+function _fileName(path) {
+  if (!path) return "uploaded file";
+  const parts = path.replace(/\\/g, "/").split("/");
+  return parts[parts.length - 1] || path;
+}
+
 function _formatIcon(format) {
   const icons = {
     ufdr: '<svg class="ev-icon" viewBox="0 0 16 16" width="16" height="16"><rect x="4" y="1" width="8" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"/><line x1="8" y1="12" x2="8" y2="12.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
@@ -248,16 +460,37 @@ async function _loadEvidence(caseId) {
           <div class="evidence-item">
             <div>
               ${_formatIcon(e.format)}
-              <span class="ev-format">${e.format}</span>
-              <span style="margin-left:8px">${e.source_path || "uploaded file"}</span>
+              <span class="ev-format">${_formatLabel(e.format)}</span>
+              <span class="ev-filename">${_fileName(e.source_path)}</span>
             </div>
-            <span class="ev-status-${e.parse_status === "done" ? "done" : "error"}">
-              ${e.parse_status}
-            </span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="ev-status-${e.parse_status === "done" ? "done" : "error"}">
+                ${e.parse_status === "done" ? "Parsed" : e.parse_status === "parsing" ? "Parsing\u2026" : "Error"}
+              </span>
+              <button class="ev-delete-btn" data-ev-id="${e.id}" title="Delete evidence">&times;</button>
+            </div>
           </div>`).join("")
       : '<p class="muted">No evidence uploaded yet.</p>';
+    // Wire delete buttons
+    el.querySelectorAll(".ev-delete-btn").forEach(btn => {
+      btn.addEventListener("click", async (ev) => {
+        ev.stopPropagation();
+        const evId = btn.dataset.evId;
+        if (!confirm("Delete this evidence file?")) return;
+        try {
+          const res = await fetch(`/api/cases/${caseId}/evidence/${evId}`, { method: "DELETE" });
+          if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed"); }
+          showToast("Evidence deleted", "success");
+          _loadEvidence(caseId);
+          _loadStats(caseId);
+        } catch (err) {
+          showToast(`Delete error: ${err.message}`, "error");
+        }
+      });
+    });
   } catch (_) {
     el.innerHTML = '<p class="muted">Could not load evidence files.</p>';
+    showToast("Failed to load evidence files", "error");
   }
 }
 
@@ -272,7 +505,15 @@ if (btnAnalyze) {
     const analysisTabBtn = document.querySelector('[data-tab="tab-analysis"]');
     if (analysisTabBtn) { analysisTabBtn.classList.add("active"); analysisTabBtn.setAttribute("aria-selected", "true"); }
     document.getElementById("tab-analysis")?.classList.add("active");
-    await loadAnalysisPreview(activeCaseId);
+    await loadAnalysisTab(activeCaseId);
+  });
+}
+
+const btnMultiModelHeader = document.getElementById("btn-multi-model-header");
+if (btnMultiModelHeader) {
+  btnMultiModelHeader.addEventListener("click", () => {
+    if (!activeCaseId) return;
+    openMultiModelModal(activeCaseId);
   });
 }
 
@@ -621,7 +862,7 @@ async function _importSelected() {
 // ── New case form ─────────────────────────────────────────────────────────────
 
 btnNewCase?.addEventListener("click", () => showView("view-new-case"));
-btnCancel?.addEventListener("click", () => showView("view-welcome"));
+btnCancel?.addEventListener("click", () => showView("view-dashboard"));
 searchInput?.addEventListener("input", filterCases);
 filterStatus?.addEventListener("change", loadCases);
 
@@ -668,4 +909,21 @@ if (btnTheme) {
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 loadCases();
-showView("view-welcome");
+showView("view-dashboard");
+initDashboard(openCase);
+
+document.getElementById("btn-brand")?.addEventListener("click", () => {
+  activeCaseId = null;
+  renderCases(allCases);
+  showView("view-dashboard");
+  initDashboard(openCase);
+});
+document.getElementById("btn-brand")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    activeCaseId = null;
+    renderCases(allCases);
+    showView("view-dashboard");
+    initDashboard(openCase);
+  }
+});
