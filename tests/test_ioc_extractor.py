@@ -147,6 +147,16 @@ def test_sources_capped_at_5():
     assert len(phones[0]["sources"]) <= 5
 
 
+# ── IOC type filter ───────────────────────────────────────────────────────────
+
+def test_ioc_type_filter():
+    msgs = [{"id": "1", "body": "+97312345678 and suspect@evil.com",
+             "platform": "sms", "thread_id": "t1", "timestamp": "2024-01-01"}]
+    result = extract_iocs(msgs, [], ioc_type_filter="phone")
+    assert all(i["type"] == "phone" for i in result["iocs"])
+    assert "email" not in result["summary"]["by_type"]
+
+
 # ── Empty input ───────────────────────────────────────────────────────────────
 
 def test_empty_input():

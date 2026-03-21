@@ -33,16 +33,6 @@ _RE_COORDS = re.compile(
     r"-?\d{1,3}\.\d{4,},\s*-?\d{1,3}\.\d{4,}"
 )
 
-_PRIVATE_IP_PREFIXES = (
-    ("10.",),
-    ("192.168.",),
-    ("172.16.", "172.17.", "172.18.", "172.19.",
-     "172.20.", "172.21.", "172.22.", "172.23.",
-     "172.24.", "172.25.", "172.26.", "172.27.",
-     "172.28.", "172.29.", "172.30.", "172.31."),
-    ("127.",),
-    ("169.254.",),
-)
 
 _MAX_SOURCES = 5
 
@@ -55,10 +45,21 @@ def _normalise_phone(raw: str) -> str:
 
 
 def _is_private_ip(ip: str) -> bool:
-    for group in _PRIVATE_IP_PREFIXES:
-        if any(ip.startswith(p) for p in group):
-            return True
-    return False
+    """Return True for RFC-1918, loopback, and link-local addresses."""
+    parts = ip.split(".")
+    if len(parts) != 4:
+        return False
+    try:
+        o1, o2 = int(parts[0]), int(parts[1])
+    except ValueError:
+        return False
+    return (
+        o1 == 10
+        or (o1 == 172 and 16 <= o2 <= 31)
+        or (o1 == 192 and o2 == 168)
+        or o1 == 127
+        or (o1 == 169 and o2 == 254)
+    )
 
 
 # ── Core extractor ────────────────────────────────────────────────────────────
@@ -93,6 +94,7 @@ def _scan_text(
         key = ("url", val)
         _add_hit(hits, key, "url", val, source, text)
 
+    # Both BTC and ETH addresses are classified as type "crypto" (see design doc)
     # BTC
     for m in _RE_BTC.finditer(text):
         val = m.group(0)
