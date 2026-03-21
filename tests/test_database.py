@@ -47,3 +47,11 @@ def test_insert_and_retrieve_case(db_path):
     db.commit()
     row = db.execute("SELECT title FROM cases WHERE id=?", ("case-001",)).fetchone()
     assert row["title"] == "Test Case"
+
+
+def test_annotations_table_exists(app):
+    from app.database import get_db
+    with app.app_context():
+        db = get_db()
+        # Should not raise — table must exist
+        db.execute("SELECT id, case_id, message_id, tag, note, created_at FROM annotations LIMIT 1")

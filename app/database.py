@@ -96,6 +96,19 @@ CREATE TABLE IF NOT EXISTS chat_history (
     created_at  TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS annotations (
+    id          TEXT PRIMARY KEY,
+    case_id     TEXT NOT NULL,
+    message_id  INTEGER NOT NULL,
+    tag         TEXT NOT NULL DEFAULT 'KEY_EVIDENCE',
+    note        TEXT DEFAULT '',
+    created_at  TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (case_id) REFERENCES cases(id) ON DELETE CASCADE,
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_annotations_case    ON annotations(case_id);
+CREATE INDEX IF NOT EXISTS idx_annotations_message ON annotations(message_id);
+
 -- FTS5 virtual tables
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
     body, sender, recipient,
