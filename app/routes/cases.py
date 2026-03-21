@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import json
+import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
 
-from flask import Blueprint, current_app, jsonify, render_template, request
+from flask import Blueprint, abort, current_app, jsonify, render_template, request
 
 from app.database import get_db
 from app.parsers.dispatcher import dispatch, detect_format
@@ -448,24 +449,51 @@ def get_messages(case_id: str):
         return jsonify([dict(r) for r in rows])
 
     # Direct query with optional filters
-    clauses = ["case_id = ?"]
+    clauses = ["m.case_id = ?"]
     params: list = [case_id]
     if platform:
-        clauses.append("platform = ?")
+        clauses.append("m.platform = ?")
         params.append(platform)
     if thread:
         clauses.append(
-            "(thread_id = ? OR "
-            "(thread_id IS NULL AND "
-            "CASE WHEN direction='incoming' THEN sender ELSE recipient END = ?))"
+            "(m.thread_id = ? OR "
+            "(m.thread_id IS NULL AND "
+            "CASE WHEN m.direction='incoming' THEN m.sender ELSE m.recipient END = ?))"
         )
         params.extend([thread, thread])
     params.extend([limit, offset])
     rows = db.execute(
-        "SELECT id, platform, direction, sender, recipient, body, timestamp, thread_id "
-        f"FROM messages WHERE {' AND '.join(clauses)} "
-        "ORDER BY timestamp ASC LIMIT ? OFFSET ?",
+        f"""
+        SELECT m.*,
+               mf.id         AS media_id,
+               mf.mime_type  AS mime_type,
+               mf.filename   AS media_filename,
+               mf.size_bytes AS media_size
+        FROM messages m
+        LEFT JOIN (
+            SELECT * FROM media_files mf2
+            WHERE mf2.id = (
+                SELECT id FROM media_files
+                WHERE message_id = mf2.message_id
+                ORDER BY extracted_at ASC LIMIT 1
+            )
+        ) mf ON mf.message_id = m.id
+        WHERE {' AND '.join(clauses)}
+        ORDER BY m.timestamp ASC LIMIT ? OFFSET ?
+        """,
         params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@bp_cases.get("/cases/<case_id>/contacts")
+def get_contacts(case_id):
+    db = get_db()
+    if not db.execute("SELECT 1 FROM cases WHERE id=?", (case_id,)).fetchone():
+        abort(404)
+    rows = db.execute(
+        "SELECT id, name, phone, email, source_app, source FROM contacts WHERE case_id=?",
+        (case_id,),
     ).fetchall()
     return jsonify([dict(r) for r in rows])
 
@@ -474,8 +502,11 @@ def _store_parsed(db, case_id: str, parsed) -> None:
     """Insert ParsedCase artifacts into DB tables."""
     for c in parsed.contacts:
         db.execute(
-            "INSERT INTO contacts (case_id, name, phone, email, source_app, raw_json) VALUES (?,?,?,?,?,?)",
-            (case_id, c["name"], c["phone"], c["email"], c["source_app"], json.dumps(c["raw_json"])),
+            "INSERT INTO contacts"
+            " (case_id, name, phone, email, source_app, raw_json, source)"
+            " VALUES (?,?,?,?,?,?,?)",
+            (case_id, c["name"], c["phone"], c["email"],
+             c["source_app"], json.dumps(c.get("raw_json") or {}), c.get("source")),
         )
     for m in parsed.messages:
         db.execute(
@@ -488,4 +519,30 @@ def _store_parsed(db, case_id: str, parsed) -> None:
             "INSERT INTO call_logs (case_id, number, direction, duration_s, timestamp, platform) VALUES (?,?,?,?,?,?)",
             (case_id, cl["number"], cl["direction"], cl["duration_s"], cl["timestamp"], cl["platform"]),
         )
+
+    # Media files (A4) — copy extracted media to cases dir and record in DB
+    cfg = current_app.config["MT_CONFIG"]
+    cases_dir = Path(cfg["server"]["cases_dir"])
+    media_dir = cases_dir / case_id / "media"
+    media_dir.mkdir(parents=True, exist_ok=True)
+
+    for mf in getattr(parsed, "media_files", []):
+        if mf.get("size_bytes", 0) > 50 * 1024 * 1024:
+            continue  # skip files > 50 MB
+        tmp = Path(mf["tmp_path"])
+        if not tmp.exists():
+            continue
+        ext = tmp.suffix.lower()
+        media_id = str(uuid.uuid4())
+        dest = media_dir / f"{media_id}{ext}"
+        shutil.copy2(tmp, dest)
+        rel_path = f"{case_id}/media/{media_id}{ext}"
+        db.execute(
+            "INSERT INTO media_files"
+            " (id, case_id, message_id, filename, mime_type, size_bytes, filepath)"
+            " VALUES (?,?,?,?,?,?,?)",
+            (media_id, case_id, mf.get("message_id"),
+             mf["filename"], mf["mime_type"], mf.get("size_bytes"), rel_path),
+        )
+
     db.commit()
