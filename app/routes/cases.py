@@ -490,7 +490,7 @@ def get_messages(case_id: str):
 def get_contacts(case_id):
     db = get_db()
     if not db.execute("SELECT 1 FROM cases WHERE id=?", (case_id,)).fetchone():
-        abort(404)
+        return jsonify({"error": "not found"}), 404
     rows = db.execute(
         "SELECT id, name, phone, email, source_app, source FROM contacts WHERE case_id=?",
         (case_id,),
@@ -501,8 +501,14 @@ def get_contacts(case_id):
 def _store_parsed(db, case_id: str, parsed) -> None:
     """Insert ParsedCase artifacts into DB tables."""
     for c in parsed.contacts:
+        existing = db.execute(
+            "SELECT 1 FROM contacts WHERE case_id=? AND phone=? AND source_app=?",
+            (case_id, c["phone"], c["source_app"]),
+        ).fetchone()
+        if existing:
+            continue
         db.execute(
-            "INSERT OR IGNORE INTO contacts"
+            "INSERT INTO contacts"
             " (case_id, name, phone, email, source_app, raw_json, source)"
             " VALUES (?,?,?,?,?,?,?)",
             (case_id, c["name"], c["phone"], c["email"],
@@ -527,7 +533,7 @@ def _store_parsed(db, case_id: str, parsed) -> None:
     media_dir.mkdir(parents=True, exist_ok=True)
 
     for mf in getattr(parsed, "media_files", []):
-        if mf.get("size_bytes", 0) > 50 * 1024 * 1024:
+        if (mf.get("size_bytes") or 0) > 50 * 1024 * 1024:
             continue  # skip files > 50 MB
         tmp_path_val = mf.get("tmp_path")
         if not tmp_path_val:
