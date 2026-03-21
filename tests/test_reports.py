@@ -186,3 +186,39 @@ def test_build_report_context_returns_dict(populated_case, client):
                 "evidence_files", "executive_summary", "conversation_excerpts",
                 "stats", "generated_at"):
         assert key in ctx, f"missing key: {key}"
+
+
+# ── PDF endpoint ───────────────────────────────────────────────────────────────
+
+def _skip_if_weasyprint_unavailable():
+    """Skip the test if weasyprint is not importable or its native libs are missing."""
+    try:
+        import weasyprint  # noqa: F401
+    except (ImportError, OSError) as e:
+        pytest.skip(f"weasyprint not available: {e}")
+
+
+def test_pdf_route_returns_pdf(populated_case, client):
+    """GET /report/pdf returns 200 with application/pdf content type."""
+    _skip_if_weasyprint_unavailable()
+    case_id = populated_case
+    r = client.get(f"/api/cases/{case_id}/report/pdf")
+    assert r.status_code == 200
+    assert r.content_type == "application/pdf"
+    assert b"%PDF" in r.data[:10]
+
+
+def test_pdf_route_404_for_missing_case(client):
+    _skip_if_weasyprint_unavailable()
+    r = client.get("/api/cases/nonexistent/report/pdf")
+    assert r.status_code == 404
+
+
+def test_pdf_content_disposition(populated_case, client):
+    _skip_if_weasyprint_unavailable()
+    case_id = populated_case
+    r = client.get(f"/api/cases/{case_id}/report/pdf")
+    assert r.status_code == 200
+    cd = r.headers.get("Content-Disposition", "")
+    assert "attachment" in cd
+    assert ".pdf" in cd

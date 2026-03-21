@@ -5,7 +5,7 @@ import json
 import re as _re
 from datetime import datetime, timezone
 
-from flask import Blueprint, jsonify, render_template
+from flask import Blueprint, jsonify, render_template, Response, request
 
 from app.database import get_db
 from app.rtl_support import augment_report_context
@@ -225,6 +225,36 @@ def get_report(case_id: str):
     if ctx is None:
         return jsonify({"error": "not found"}), 404
     return render_template("report.html", **ctx)
+
+
+@bp_reports.get("/cases/<case_id>/report/pdf")
+def get_report_pdf(case_id: str):
+    """Render the case report as a downloadable PDF using WeasyPrint."""
+    try:
+        import weasyprint
+    except (ImportError, OSError):
+        return jsonify({"error": "WeasyPrint not available — install it with pip install weasyprint"}), 500
+
+    db = get_db()
+    ctx = _build_report_context(db, case_id)
+    if ctx is None:
+        return jsonify({"error": "not found"}), 404
+
+    html_string = render_template("report.html", **ctx)
+    pdf_bytes = weasyprint.HTML(
+        string=html_string,
+        base_url=request.host_url,
+    ).write_pdf()
+
+    safe_title = (ctx["case"].get("title") or case_id)[:50]
+    safe_title = "".join(c if c.isalnum() or c in " -_" else "_" for c in safe_title)
+    filename = f"report-{safe_title}.pdf"
+
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @bp_reports.get("/cases/<case_id>/graph")
