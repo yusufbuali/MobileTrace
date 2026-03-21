@@ -15,6 +15,9 @@ class ParsedCase:
     contacts: list[dict[str, Any]] = field(default_factory=list)
     messages: list[dict[str, Any]] = field(default_factory=list)
     call_logs: list[dict[str, Any]] = field(default_factory=list)
+    media_files: list[dict[str, Any]] = field(default_factory=list)
+    # Each dict: { message_id: int|None, filename: str, mime_type: str,
+    #              size_bytes: int, tmp_path: str }
     raw_db_paths: list[Path] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -59,6 +62,7 @@ class BaseParser(ABC):
         email: str = "",
         source_app: str = "device_contacts",
         raw: dict | None = None,
+        source: str | None = None,
     ) -> dict[str, Any]:
         return {
             "name": name or "",
@@ -66,7 +70,19 @@ class BaseParser(ABC):
             "email": email or "",
             "source_app": source_app,
             "raw_json": raw or {},
+            "source": source,   # None = normal, 'recovered' = reconstructed
         }
+
+    @staticmethod
+    def _norm_phone(phone: str) -> str:
+        """Normalize a phone number to a stable dedup key (digits + leading +)."""
+        if not phone:
+            return ""
+        phone = str(phone).strip()
+        # Keep leading + for international numbers
+        prefix = "+" if phone.startswith("+") else ""
+        digits = "".join(c for c in phone if c.isdigit())
+        return prefix + digits
 
     @staticmethod
     def _norm_call(
