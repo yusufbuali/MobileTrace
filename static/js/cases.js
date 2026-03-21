@@ -169,10 +169,9 @@ async function openCase(id) {
     _loadEvidence(id);
     // Report link
     if (btnReport) btnReport.href = `/api/cases/${id}/report`;
-    const btnPdf = document.getElementById("btn-report-pdf");
-    if (btnPdf) {
-      btnPdf.href = `/api/cases/${id}/report/pdf`;
-      btnPdf.style.display = "";
+    if (btnReportPdf) {
+      btnReportPdf.href = `/api/cases/${id}/report/pdf`;
+      btnReportPdf.style.display = "";
     }
     // Chat
     initChat(id);
