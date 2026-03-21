@@ -26,6 +26,7 @@ def test_tables_created(db_path):
     assert "chat_history" in tables
     assert "evidence_files" in tables
     assert "annotations" in tables
+    assert "media_files" in tables
 
 
 def test_fts5_tables_created(db_path):

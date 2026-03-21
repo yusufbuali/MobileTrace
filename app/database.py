@@ -164,7 +164,7 @@ CREATE TABLE IF NOT EXISTS media_files (
     size_bytes   INTEGER,
     filepath     TEXT NOT NULL,
     extracted_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (message_id) REFERENCES messages(id)
+    FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_media_files_case    ON media_files(case_id);
 CREATE INDEX IF NOT EXISTS idx_media_files_message ON media_files(message_id);
@@ -204,8 +204,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
     try:
         conn.execute("ALTER TABLE contacts ADD COLUMN source TEXT DEFAULT NULL")
         conn.commit()
-    except sqlite3.OperationalError:
-        pass  # column already exists
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" not in str(e):
+            raise
 
 
 def init_db(db_path: str) -> None:
