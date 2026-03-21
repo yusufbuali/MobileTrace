@@ -56,3 +56,24 @@ def test_annotations_table_exists(app):
         db = get_db()
         # Should not raise — table must exist
         db.execute("SELECT id, case_id, message_id, tag, note, created_at FROM annotations LIMIT 1")
+
+
+def test_contacts_source_column(app):
+    """contacts table must have a source column defaulting to NULL."""
+    with app.app_context():
+        from app.database import get_db
+        db = get_db()
+        info = db.execute("PRAGMA table_info(contacts)").fetchall()
+        cols = [r["name"] for r in info]
+        assert "source" in cols
+
+
+def test_media_files_table_exists(app):
+    """media_files table must exist with required columns."""
+    with app.app_context():
+        from app.database import get_db
+        db = get_db()
+        info = db.execute("PRAGMA table_info(media_files)").fetchall()
+        cols = [r["name"] for r in info]
+        for col in ["id", "case_id", "message_id", "filename", "mime_type", "size_bytes", "filepath"]:
+            assert col in cols, f"Missing column: {col}"

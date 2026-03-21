@@ -154,6 +154,20 @@ CREATE TRIGGER IF NOT EXISTS contacts_ad AFTER DELETE ON contacts BEGIN
     INSERT INTO contacts_fts(contacts_fts, rowid, name, phone, email)
     VALUES ('delete', old.id, old.name, old.phone, old.email);
 END;
+
+CREATE TABLE IF NOT EXISTS media_files (
+    id           TEXT PRIMARY KEY,
+    case_id      TEXT NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    message_id   INTEGER,
+    filename     TEXT NOT NULL,
+    mime_type    TEXT NOT NULL,
+    size_bytes   INTEGER,
+    filepath     TEXT NOT NULL,
+    extracted_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (message_id) REFERENCES messages(id)
+);
+CREATE INDEX IF NOT EXISTS idx_media_files_case    ON media_files(case_id);
+CREATE INDEX IF NOT EXISTS idx_media_files_message ON media_files(message_id);
 """
 
 
@@ -185,6 +199,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
         CREATE UNIQUE INDEX IF NOT EXISTS idx_analysis_results_multi
             ON analysis_results(case_id, artifact_key, COALESCE(run_id,''), COALESCE(provider,''));
         """)
+
+    # Add source column to contacts (idempotent)
+    try:
+        conn.execute("ALTER TABLE contacts ADD COLUMN source TEXT DEFAULT NULL")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # column already exists
 
 
 def init_db(db_path: str) -> None:
