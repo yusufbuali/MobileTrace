@@ -144,6 +144,20 @@ class AndroidParser(BaseParser):
         result.messages += self._read_signal(db_paths.get("signal"), warnings, signal_key=signal_key)
         result.call_logs = self._read_calls(db_paths.get("calllog"), warnings)
 
+        # C3: recover contacts from messaging metadata if contacts DBs are empty
+        if not result.contacts:
+            recovered = self._recover_contacts_android(
+                wa_db_path=db_paths.get("wa_ct"),
+                tg_db_path=db_paths.get("telegram"),
+                parsed_messages=result.messages,
+                warnings=warnings,
+            )
+            result.contacts.extend(recovered)
+            if recovered:
+                warnings.append(
+                    f"contacts2.db empty — recovered {len(recovered)} contacts from messaging data"
+                )
+
         result.warnings = warnings
         return result
 
@@ -435,6 +449,66 @@ class AndroidParser(BaseParser):
         finally:
             conn.close()
         return msgs
+
+    def _recover_contacts_android(
+        self,
+        wa_db_path,
+        tg_db_path,
+        parsed_messages: list,
+        warnings: list,
+    ) -> list:
+        """Reconstruct contacts from messaging metadata when contacts2.db is empty."""
+        import sqlite3 as _sq3
+        recovered: dict[str, dict] = {}
+
+        def _add(name, phone, source_app):
+            norm = self._norm_phone(phone)
+            key = norm or name
+            if key and key not in recovered:
+                recovered[key] = self._norm_contact(
+                    name=name, phone=norm, email="",
+                    source_app=source_app, source="recovered"
+                )
+
+        # 1. WhatsApp wa_contacts
+        if wa_db_path and Path(wa_db_path).exists():
+            try:
+                conn = _sq3.connect(str(wa_db_path))
+                conn.row_factory = _sq3.Row
+                for row in conn.execute(
+                    "SELECT display_name, number FROM wa_contacts"
+                    " WHERE display_name IS NOT NULL AND display_name != ''"
+                ).fetchall():
+                    _add(row["display_name"], row["number"] or "", "whatsapp_contacts")
+                conn.close()
+            except Exception as e:
+                warnings.append(f"Contact recovery (WhatsApp Android): {e}")
+
+        # 2. Telegram user_contacts_v7
+        if tg_db_path and Path(tg_db_path).exists():
+            try:
+                conn = _sq3.connect(str(tg_db_path))
+                conn.row_factory = _sq3.Row
+                for row in conn.execute(
+                    "SELECT uid, fname, sname FROM user_contacts_v7"
+                ).fetchall():
+                    name = f"{row['fname'] or ''} {row['sname'] or ''}".strip()
+                    _add(name or str(row["uid"]), "", "telegram_contacts")
+                conn.close()
+            except Exception as e:
+                warnings.append(f"Contact recovery (Telegram Android): {e}")
+
+        # 3. SMS metadata
+        for msg in parsed_messages:
+            if msg.get("platform") != "sms":
+                continue
+            raw = msg.get("raw_json") or {}
+            name = raw.get("contact_name") or ""
+            phone = raw.get("address") or msg.get("sender") or ""
+            if name and phone:
+                _add(name, phone, "sms_metadata")
+
+        return list(recovered.values())
 
     def _read_signal(self, path: Path | None, warnings: list, signal_key: str = "") -> list[dict]:
         if not path or not path.exists():

@@ -127,6 +127,21 @@ class iOSParser(BaseParser):
         result.messages += self._read_whatsapp(db_paths.get("whatsapp"), warnings)
         result.messages += self._read_telegram_ios(db_paths.get("telegram"), warnings)
         result.call_logs = self._read_calls(db_paths.get("calls"), warnings)
+
+        # C3: recover contacts from messaging metadata if AddressBook is empty
+        if not result.contacts:
+            recovered = self._recover_contacts_ios(
+                wa_db_path=db_paths.get("whatsapp"),
+                tg_db_path=db_paths.get("telegram"),
+                parsed_messages=result.messages,
+                warnings=warnings,
+            )
+            result.contacts.extend(recovered)
+            if recovered:
+                warnings.append(
+                    f"AddressBook empty — recovered {len(recovered)} contacts from messaging data"
+                )
+
         result.warnings = warnings
         return result
 
@@ -413,6 +428,67 @@ class iOSParser(BaseParser):
         finally:
             conn.close()
         return calls
+
+    def _recover_contacts_ios(
+        self,
+        wa_db_path,
+        tg_db_path,
+        parsed_messages: list,
+        warnings: list,
+    ) -> list:
+        """Reconstruct contacts from messaging metadata when AddressBook is empty."""
+        import sqlite3 as _sq3
+        recovered: dict[str, dict] = {}  # normalized_phone → contact dict
+
+        def _add(name, phone, source_app):
+            norm = self._norm_phone(phone)
+            key = norm or name  # fall back to name if phone is empty
+            if key and key not in recovered:
+                recovered[key] = self._norm_contact(
+                    name=name, phone=norm, email="",
+                    source_app=source_app, source="recovered"
+                )
+
+        # 1. WhatsApp wa_contacts
+        if wa_db_path and Path(wa_db_path).exists():
+            try:
+                conn = _sq3.connect(str(wa_db_path))
+                conn.row_factory = _sq3.Row
+                for row in conn.execute(
+                    "SELECT display_name, number FROM wa_contacts"
+                    " WHERE display_name IS NOT NULL AND display_name != ''"
+                ).fetchall():
+                    _add(row["display_name"], row["number"] or "", "whatsapp_contacts")
+                conn.close()
+            except Exception as e:
+                warnings.append(f"Contact recovery (WhatsApp iOS): {e}")
+
+        # 2. Telegram peers table
+        if tg_db_path and Path(tg_db_path).exists():
+            try:
+                conn = _sq3.connect(str(tg_db_path))
+                conn.row_factory = _sq3.Row
+                for row in conn.execute(
+                    "SELECT phone, first_name, last_name FROM peers"
+                    " WHERE phone IS NOT NULL AND phone != ''"
+                ).fetchall():
+                    name = f"{row['first_name'] or ''} {row['last_name'] or ''}".strip()
+                    _add(name or row["phone"], row["phone"], "telegram_peers")
+                conn.close()
+            except Exception as e:
+                warnings.append(f"Contact recovery (Telegram iOS): {e}")
+
+        # 3. SMS sender names from already-parsed messages
+        for msg in parsed_messages:
+            if msg.get("platform") != "sms":
+                continue
+            raw = msg.get("raw_json") or {}
+            name = raw.get("contact_name") or ""
+            phone = raw.get("address") or msg.get("sender") or ""
+            if name and phone:
+                _add(name, phone, "sms_metadata")
+
+        return list(recovered.values())
 
     def _read_whatsapp(self, path: Path | None, warnings: list) -> list[dict]:
         conn = self._open_db(path)
