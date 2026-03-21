@@ -74,7 +74,7 @@ class BaseParser(ABC):
         }
 
     @staticmethod
-    def _norm_phone(phone: str) -> str:
+    def _norm_phone(phone: str | None) -> str:
         """Normalize a phone number to a stable dedup key (digits + leading +)."""
         if not phone:
             return ""
