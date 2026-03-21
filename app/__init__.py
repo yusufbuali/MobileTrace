@@ -56,6 +56,7 @@ def create_app(config_path: str = "config.yaml", testing: bool = False) -> Flask
     from .routes.correlation import bp_correlation
     from .routes.ioc import bp_ioc
     from .routes.annotations import bp_annotations
+    from .routes.timeline import bp_timeline
     app.register_blueprint(bp_cases)
     app.register_blueprint(bp_analysis)
     app.register_blueprint(bp_chat)
@@ -65,6 +66,7 @@ def create_app(config_path: str = "config.yaml", testing: bool = False) -> Flask
     app.register_blueprint(bp_correlation)
     app.register_blueprint(bp_ioc)
     app.register_blueprint(bp_annotations)
+    app.register_blueprint(bp_timeline)
 
     @app.route("/api/health")
     def health():
