@@ -79,14 +79,22 @@ def update_annotation(case_id: str, ann_id: str):
     tag = body.get("tag")
     note = body.get("note")
 
+    fields, params = [], []
     if tag is not None:
         tag = tag.upper()
         if tag not in _VALID_TAGS:
             return jsonify({"error": f"tag must be one of {sorted(_VALID_TAGS)}"}), 400
-        db.execute("UPDATE annotations SET tag=? WHERE id=?", (tag, ann_id))
+        fields.append("tag=?")
+        params.append(tag)
     if note is not None:
-        db.execute("UPDATE annotations SET note=? WHERE id=?", (note[:1000], ann_id))
-    db.commit()
+        fields.append("note=?")
+        params.append(note[:1000])
+
+    if fields:
+        params.append(ann_id)
+        db.execute(f"UPDATE annotations SET {', '.join(fields)} WHERE id=?", params)
+        db.commit()
+
     updated = db.execute("SELECT * FROM annotations WHERE id=?", (ann_id,)).fetchone()
     return jsonify(dict(updated))
 
