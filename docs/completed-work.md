@@ -279,6 +279,67 @@ Surfaces AI analysis intelligence directly on the Overview tab so investigators 
 
 ---
 
+## IOC Extraction — Intelligence Tab (completed 2026-03-21)
+
+**Plan:** `docs/plans/2026-03-21-ioc-extraction.md`
+**New files:** `app/ioc_extractor.py`, `app/routes/ioc.py`, `static/js/ioc.js`, `tests/test_ioc_extractor.py`, `tests/test_ioc_routes.py`
+**Modified:** `app/__init__.py`, `templates/index.html`, `static/js/cases.js`, `static/style.css`
+
+| Component | Description |
+|-----------|-------------|
+| `app/ioc_extractor.py` | Pure Python regex IOC extractor; `extract_iocs(messages, contacts, ioc_type_filter)` → `{summary, iocs}` |
+| IOC types | phone, email, url, crypto (BTC/ETH addresses), ip (public only), gps |
+| `_is_private_ip()` | Full 4-octet integer validation for RFC1918 ranges; filters 10/8, 172.16-31/12, 192.168/16, 127/8, 169.254/16 |
+| Deduplication | `(type, value)` keyed dict; first 5 source messages stored per IOC |
+| `by_type` summary | Computed from all IOCs before type filter; filter only affects `iocs` list and `total` |
+| `GET /api/cases/<id>/ioc?type=` | Queries messages + contacts, returns extractor result + `case_id` |
+| Intelligence tab | New tab in SPA; summary bar with type counts, filter pills, sortable table |
+| Cross-tab jump | IOC row "Jump" button dispatches `mt:jump-to-thread` → cases.js → conversations.js opens thread |
+| CSV export | Downloads all IOCs as RFC-4180 CSV with quoted values |
+| Tests | 19 extractor unit tests + 6 route tests |
+
+---
+
+## Evidence Annotations (completed 2026-03-21)
+
+**Plan:** `docs/plans/2026-03-21-evidence-annotations.md`
+**New files:** `app/routes/annotations.py`, `tests/test_annotations_routes.py`
+**Modified:** `app/database.py`, `app/__init__.py`, `templates/index.html`, `static/js/conversations.js`, `static/style.css`
+
+| Component | Description |
+|-----------|-------------|
+| `annotations` DB table | `id TEXT PK`, `case_id`, `message_id FK`, `tag`, `note`, `created_at`; CASCADE delete |
+| Indexes | `idx_annotations_case`, `idx_annotations_message` |
+| `POST /api/cases/<id>/annotations` | Creates annotation; validates `message_id` belongs to `case_id`; DELETE+INSERT upsert pattern |
+| `GET /api/cases/<id>/annotations` | Returns all annotations with joined message fields |
+| `PATCH /api/cases/<id>/annotations/<ann_id>` | Updates tag/note with single dynamic UPDATE |
+| `DELETE /api/cases/<id>/annotations/<ann_id>` | Removes annotation |
+| Valid tags | KEY_EVIDENCE, SUSPICIOUS, ALIBI, EXCULPATORY, NOTE |
+| Conversations UI | ☆/★ flag button per message bubble; click opens annotation panel (select+textarea+Save/Delete/Cancel) |
+| HTML report | "Annotated Evidence" section between conversation excerpts and AI analysis |
+| Tests | 12 route tests covering all CRUD + validation + cross-case ownership |
+
+---
+
+## PDF Export (completed 2026-03-21)
+
+**Plan:** `docs/plans/2026-03-21-pdf-export.md`
+**Modified:** `app/routes/reports.py`, `templates/report.html`, `requirements.txt`, `Dockerfile`, `static/js/cases.js`, `templates/index.html`
+
+| Component | Description |
+|-----------|-------------|
+| `_build_report_context()` | Shared helper extracted from `get_report()`; used by both HTML and PDF endpoints |
+| `GET /api/cases/<id>/report/pdf` | WeasyPrint server-side render; graceful 500 if WeasyPrint/GTK not available |
+| Deferred import | `import weasyprint` inside handler with `try/except (ImportError, OSError)` |
+| Print CSS | `@media print` block: white bg, black text, `page-break-inside: avoid` on panels |
+| `@page` | A4 size, 15mm margins; `@bottom-center` page counter via WeasyPrint paged media |
+| Safe filename | Alphanumeric-only sanitization of case title for `Content-Disposition` header |
+| UI button | "📄 PDF" button in top bar; `href` set on `openCase()`, hidden until case loaded |
+| Dockerfile | `apt-get install` block for libgobject, libcairo2, libpango, libpangoft2, etc. |
+| requirements.txt | `weasyprint>=60.0` added |
+
+---
+
 ## Correlation Tab — Contact Network Graph (completed 2026-03-09)
 
 **New files:** `app/routes/correlation.py`, `static/js/correlation.js`

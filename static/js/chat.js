@@ -579,14 +579,14 @@ export async function loadAnalysisResults(caseId) {
   execContent.innerHTML = "";
   const summaryParts = rows.map(r => {
     const p = r.result_parsed || null;
-    const rsum = p && (p.risk_level_summary || p.executive_summary || p.summary);
-    if (rsum) return `**${_titleCase(r.artifact_key)}:** ${rsum}`;
-    if (!p && r.result) return `**${_titleCase(r.artifact_key)}:** ${String(r.result).slice(0, 200).trim()}`;
+    const rsumRaw = p && (p.risk_level_summary || p.executive_summary || p.summary);
+    const rsum = rsumRaw ? _toStr(rsumRaw) : null;
+    if (rsum) return `**${_titleCase(r.artifact_key)}:** ${_stripMarkdownHeaders(rsum)}`;
+    if (!p && r.result) return `**${_titleCase(r.artifact_key)}:** ${_stripMarkdownHeaders(String(r.result).slice(0, 300).trim())}`;
     return null;
   }).filter(Boolean);
-  
+
   const summaryFrag = markdownToFragment(summaryParts.length ? summaryParts.join("\n\n") : "_No summary available._");
-  // Enhance summary with jump links if applicable
   summaryFrag.querySelectorAll("strong").forEach(bold => {
     const text = bold.textContent.replace(":", "");
     const matchingRow = rows.find(r => _titleCase(r.artifact_key) === text);
@@ -718,6 +718,16 @@ function _titleCase(str) {
   return String(str || "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 
+function _toStr(v) {
+  if (typeof v === "string") return v;
+  if (v && typeof v === "object") return v.text || v.summary || v.content || "";
+  return String(v || "");
+}
+
+function _stripMarkdownHeaders(s) {
+  return s.replace(/^#{1,6}\s*/gm, "").replace(/^---+$/gm, "").trim();
+}
+
 // ── Analysis JSON normalizer ──────────────────────────────────────────────────
 // LLMs return inconsistent field names and nesting. This maps everything to the
 // canonical schema before rendering.
@@ -777,9 +787,11 @@ function _normalizeAnalysis(raw) {
     }));
   }
 
-  // 6. Normalize risk_level_summary from alternate fields
+  // 6. Normalize risk_level_summary from alternate fields (coerce to string — LLM may return objects)
   if (!p.risk_level_summary) {
-    p.risk_level_summary = p.risk_classification || p.executive_summary || p.overall_assessment || "";
+    p.risk_level_summary = _toStr(p.risk_classification || p.executive_summary || p.overall_assessment || "");
+  } else {
+    p.risk_level_summary = _toStr(p.risk_level_summary);
   }
 
   return p;
@@ -1316,8 +1328,9 @@ async function _loadMultiRunResults(caseId, runId) {
   execContent.innerHTML = "";
   const summaryParts = consensusRows.map(r => {
     const p = r.result_parsed ? _normalizeAnalysis(r.result_parsed) : null;
-    const rsum = p && (p.risk_level_summary || p.executive_summary || p.summary);
-    if (rsum) return `**${_titleCase(r.artifact_key)}:** ${rsum}`;
+    const rsumRaw = p && (p.risk_level_summary || p.executive_summary || p.summary);
+    const rsum = rsumRaw ? _toStr(rsumRaw) : null;
+    if (rsum) return `**${_titleCase(r.artifact_key)}:** ${_stripMarkdownHeaders(rsum)}`;
     return null;
   }).filter(Boolean);
   execContent.appendChild(markdownToFragment(summaryParts.length ? summaryParts.join("\n\n") : "_No summary available._"));

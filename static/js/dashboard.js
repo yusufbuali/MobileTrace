@@ -57,6 +57,8 @@ function _renderRiskChart(dist) {
     type: "doughnut",
     data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 1, borderColor: _getCSSVar("--surface") }] },
     options: {
+      responsive: true,
+      maintainAspectRatio: false,
       cutout: "65%",
       plugins: {
         legend: {
@@ -85,6 +87,8 @@ function _renderStatusChart(pipeline) {
     type: "bar",
     data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 4, borderSkipped: false }] },
     options: {
+      responsive: true,
+      maintainAspectRatio: false,
       indexAxis: "y",
       plugins: { legend: { display: false } },
       scales: {
@@ -99,9 +103,10 @@ function _renderStatusChart(pipeline) {
 function _renderCrimesChart(cats) {
   const card = document.querySelector(".gdb-chart-card--wide");
   const canvas = document.getElementById("chart-crimes");
-  if (!card || !canvas) return;
+  if (!card || !canvas || !window.Chart) return;
 
   if (!cats.length) {
+    if (_chartCrimes) { _chartCrimes.destroy(); _chartCrimes = null; }
     canvas.style.display = "none";
     if (!card.querySelector(".gdb-chart-empty")) {
       const el = document.createElement("div");
@@ -129,6 +134,8 @@ function _renderCrimesChart(cats) {
     type: "bar",
     data: { labels, datasets: [{ data, backgroundColor: accent + "cc", borderRadius: 3, borderSkipped: false }] },
     options: {
+      responsive: true,
+      maintainAspectRatio: false,
       indexAxis: "y",
       plugins: { legend: { display: false } },
       scales: {

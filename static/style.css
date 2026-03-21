@@ -70,14 +70,15 @@ button[type="button"] { background: var(--surface2); color: var(--text); border:
 .sidebar-footer { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
 
 /* Dashboard header */
-.dashboard-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+.dashboard-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 16px; }
+.dashboard-header > :first-child { flex: 1; min-width: 0; }
 .dash-meta { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
-.dash-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.dash-actions { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
 .btn-secondary { background: var(--surface2); color: var(--info); border: 1px solid var(--info); padding: 10px 18px; border-radius: var(--radius); cursor: pointer; font-size: 0.9rem; text-decoration: none; display: inline-block; transition: background 0.15s, border-color 0.15s; }
 .btn-secondary:hover { background: rgba(88,166,255,0.08); }
 
 /* Tabs */
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; flex-wrap: wrap; }
 .tab-btn { background: none; border: none; color: var(--text-muted); padding: 8px 16px; cursor: pointer; font-size: 0.82rem; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s, border-color 0.15s; }
 .tab-btn:hover { color: var(--text); }
 .tab-btn.active { color: var(--info); border-bottom-color: var(--info); font-weight: 600; }
@@ -945,7 +946,7 @@ button[type="button"] { background: var(--surface2); color: var(--text); border:
 /* Charts row */
 .gdb-charts-row {
   display: grid;
-  grid-template-columns: 200px 200px 1fr;
+  grid-template-columns: minmax(200px, 280px) minmax(200px, 280px) 1fr;
   gap: 14px;
   margin-bottom: 20px;
   align-items: start;
@@ -955,9 +956,11 @@ button[type="button"] { background: var(--surface2); color: var(--text); border:
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 14px;
-  min-height: 240px;
+  height: 260px;
+  box-sizing: border-box;
 }
-.gdb-chart-card--wide { min-height: 240px; }
+.gdb-chart-card canvas { max-height: 200px; }
+.gdb-chart-card--wide { height: 260px; }
 .gdb-chart-title {
   font-size: 0.8rem;
   font-weight: 600;
@@ -976,7 +979,7 @@ button[type="button"] { background: var(--surface2); color: var(--text); border:
 /* Bottom row */
 .gdb-bottom-row {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: minmax(260px, 380px) 1fr;
   gap: 14px;
   align-items: start;
 }
