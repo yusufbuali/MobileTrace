@@ -39,6 +39,7 @@ export async function initIoc(caseId) {
   if (!caseId) return;
   _caseId = caseId;
   _activeFilter = "all";
+  _allIocs = [];
 
   const wrap = dom("ioc-table-wrap");
   wrap.innerHTML = '<div class="ioc-loading">Scanning evidence\u2026</div>';
@@ -203,7 +204,9 @@ function _exportCsv(iocs) {
   const header = "Type,Value,Occurrences,First Seen,Last Seen,Platform,Thread\n";
   const rows = iocs.flatMap(ioc => {
     if (!ioc.sources?.length) {
-      return [`${ioc.type},${ioc.value},${ioc.occurrences},${ioc.first_seen},${ioc.last_seen},,`];
+      return [[ioc.type, ioc.value, ioc.occurrences, ioc.first_seen, ioc.last_seen, "", ""]
+        .map(v => `"${String(v ?? "").replace(/"/g, '""')}"`)
+        .join(",")];
     }
     return ioc.sources.map(s =>
       [ioc.type, ioc.value, ioc.occurrences, ioc.first_seen, ioc.last_seen, s.platform, s.thread_id]
