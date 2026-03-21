@@ -381,7 +381,8 @@ function _openAnnotationPanel(flagBtn, msg, caseId) {
     const existing = _annotations.get(msg.id);
     if (!existing) { panel.remove(); return; }
     try {
-      await fetch(`/api/cases/${caseId}/annotations/${existing.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/cases/${caseId}/annotations/${existing.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
       _annotations.delete(msg.id);
       _refreshBubbleAnnotation(flagBtn, null);
       panel.remove();
