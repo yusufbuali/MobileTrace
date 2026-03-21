@@ -1,10 +1,14 @@
 """Base types for MobileTrace parsers."""
 from __future__ import annotations
 
+import logging
+import sqlite3
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -83,6 +87,62 @@ class BaseParser(ABC):
         prefix = "+" if phone.startswith("+") else ""
         digits = "".join(c for c in phone if c.isdigit())
         return prefix + digits
+
+    def _open_db(self, path) -> sqlite3.Connection | None:
+        """Open a SQLite DB with Row factory; return None on failure or missing path."""
+        p = Path(path) if path else None
+        if not p or not p.exists():
+            return None
+        try:
+            conn = sqlite3.connect(str(p))
+            conn.row_factory = sqlite3.Row
+            return conn
+        except Exception as exc:
+            logger.warning("Cannot open %s: %s", path, exc)
+            return None
+
+    def _recover_from_wa_sms(
+        self,
+        wa_db_path,
+        parsed_messages: list,
+        warnings: list,
+        source_label: str,
+    ) -> dict[str, dict]:
+        """Return {key: contact_dict} recovered from WhatsApp + SMS metadata."""
+        recovered: dict[str, dict] = {}
+
+        def _add(name: str, phone: str, source_app: str) -> None:
+            norm = self._norm_phone(phone)
+            key = norm or name
+            if key and key not in recovered:
+                recovered[key] = self._norm_contact(
+                    name=name, phone=norm, email="",
+                    source_app=source_app, source="recovered",
+                )
+
+        conn = self._open_db(wa_db_path)
+        if conn:
+            try:
+                for row in conn.execute(
+                    "SELECT display_name, number FROM wa_contacts"
+                    " WHERE display_name IS NOT NULL AND display_name != ''"
+                ).fetchall():
+                    _add(row["display_name"], row["number"] or "", "whatsapp_contacts")
+            except Exception as e:
+                warnings.append(f"Contact recovery (WhatsApp {source_label}): {e}")
+            finally:
+                conn.close()
+
+        for msg in parsed_messages:
+            if msg.get("platform") != "sms":
+                continue
+            raw = msg.get("raw_json") or {}
+            name = raw.get("contact_name") or ""
+            phone = raw.get("address") or msg.get("sender") or ""
+            if name and phone:
+                _add(name, phone, "sms_metadata")
+
+        return recovered
 
     @staticmethod
     def _norm_call(

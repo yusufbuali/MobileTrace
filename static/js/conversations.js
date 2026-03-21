@@ -2,21 +2,20 @@
  * conversations.js — Conversations tab for MobileTrace.
  * Browse all messages grouped by platform/thread, with search.
  */
-import { apiFetch } from "./api.js";
+import { apiFetch, fmtBytes } from "./api.js";
 
 let _caseId = null;
 let _threads = [];
 let _activePlatform = null;  // null = all platforms
 let _searchTimer = null;
 let _annotations = new Map(); // message_id (number) → annotation object
-let _lightboxInited = false;
+let _lazyObserver = null;
 
 function dom(id) { return document.getElementById(id); }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export async function initConversations(caseId) {
-  if (!_lightboxInited) { _initLightbox(); _lightboxInited = true; }
   clearTimeout(_searchTimer);
   if (!caseId) {
     _showNoCaseState();
@@ -504,18 +503,12 @@ async function _search(q) {
 
 // ── Media thumbnail helpers (A4) ──────────────────────────────────────────
 
-function _fmtBytes(b) {
-  if (b > 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
-  if (b > 1024) return `${(b / 1024).toFixed(0)} KB`;
-  return `${b} B`;
-}
-
 function _renderMediaThumb(msg, caseId, container) {
   if (!msg.media_id) return;
   const url    = `/api/cases/${caseId}/media/${msg.media_id}`;
   const mime   = msg.mime_type || "";
   const fname  = msg.media_filename || "attachment";
-  const size   = msg.media_size ? ` · ${_fmtBytes(msg.media_size)}` : "";
+  const size   = msg.media_size ? ` · ${fmtBytes(msg.media_size)}` : "";
 
   const wrap = document.createElement("div");
   wrap.className = "msg-media-wrap";
@@ -567,25 +560,24 @@ function _initLightbox() {
 function _lazyLoadImages(container) {
   const els = container.querySelectorAll("[data-src]");
   if (!els.length) return;
-  const obs = new IntersectionObserver(entries => {
+  if (_lazyObserver) _lazyObserver.disconnect();
+  _lazyObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
       if (!e.isIntersecting) return;
       const el = e.target;
       const url  = el.dataset.src;
       const name = el.dataset.mediaName || "";
-      const type = el.dataset.mediaType || "image";
       if (el.tagName === "IMG") {
         el.src = url;
         el.addEventListener("click", () => _openLightbox(url, name, "image"));
       } else {
-        // video placeholder div
         el.addEventListener("click", () => _openLightbox(url, name, "video"));
       }
       el.removeAttribute("data-src");
-      obs.unobserve(el);
+      _lazyObserver.unobserve(el);
     });
   }, { rootMargin: "200px" });
-  els.forEach(el => obs.observe(el));
+  els.forEach(el => _lazyObserver.observe(el));
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -625,3 +617,6 @@ function _fmtDate(ts) {
     return ts;
   }
 }
+
+// Wire lightbox once at module load — type="module" scripts execute after DOM is ready.
+_initLightbox();

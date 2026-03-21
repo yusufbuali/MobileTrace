@@ -1,4 +1,4 @@
-import { api, apiFetch } from "./api.js";
+import { api, apiFetch, fmtBytes } from "./api.js";
 import { initChat, triggerAnalysis, loadAnalysisResults, loadAnalysisPreview, loadAnalysisTab, openMultiModelModal } from "./chat.js";
 import { initConversations } from "./conversations.js";
 import { showToast } from "./toast.js";
@@ -679,11 +679,7 @@ const folderResultsList = document.getElementById("fs-results-list");
 let _lastScanPath = "";
 let _lastScanData = null;
 
-function _fmtSize(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+const _fmtSize = fmtBytes;
 
 if (formFolderScan) {
   formFolderScan.addEventListener("submit", async (e) => {

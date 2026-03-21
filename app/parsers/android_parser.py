@@ -458,55 +458,26 @@ class AndroidParser(BaseParser):
         warnings: list,
     ) -> list:
         """Reconstruct contacts from messaging metadata when contacts2.db is empty."""
-        import sqlite3 as _sq3
-        recovered: dict[str, dict] = {}
+        recovered = self._recover_from_wa_sms(wa_db_path, parsed_messages, warnings, "Android")
 
-        def _add(name, phone, source_app):
-            norm = self._norm_phone(phone)
-            key = norm or name
-            if key and key not in recovered:
-                recovered[key] = self._norm_contact(
-                    name=name, phone=norm, email="",
-                    source_app=source_app, source="recovered"
-                )
-
-        # 1. WhatsApp wa_contacts
-        if wa_db_path and Path(wa_db_path).exists():
+        # Telegram user_contacts_v7 (Android schema)
+        conn = self._open_db(tg_db_path)
+        if conn:
             try:
-                conn = _sq3.connect(str(wa_db_path))
-                conn.row_factory = _sq3.Row
-                for row in conn.execute(
-                    "SELECT display_name, number FROM wa_contacts"
-                    " WHERE display_name IS NOT NULL AND display_name != ''"
-                ).fetchall():
-                    _add(row["display_name"], row["number"] or "", "whatsapp_contacts")
-                conn.close()
-            except Exception as e:
-                warnings.append(f"Contact recovery (WhatsApp Android): {e}")
-
-        # 2. Telegram user_contacts_v7
-        if tg_db_path and Path(tg_db_path).exists():
-            try:
-                conn = _sq3.connect(str(tg_db_path))
-                conn.row_factory = _sq3.Row
                 for row in conn.execute(
                     "SELECT uid, fname, sname FROM user_contacts_v7"
                 ).fetchall():
                     name = f"{row['fname'] or ''} {row['sname'] or ''}".strip()
-                    _add(name or str(row["uid"]), "", "telegram_contacts")
-                conn.close()
+                    key = name or str(row["uid"])
+                    if key and key not in recovered:
+                        recovered[key] = self._norm_contact(
+                            name=name or str(row["uid"]), phone="", email="",
+                            source_app="telegram_contacts", source="recovered",
+                        )
             except Exception as e:
                 warnings.append(f"Contact recovery (Telegram Android): {e}")
-
-        # 3. SMS metadata
-        for msg in parsed_messages:
-            if msg.get("platform") != "sms":
-                continue
-            raw = msg.get("raw_json") or {}
-            name = raw.get("contact_name") or ""
-            phone = raw.get("address") or msg.get("sender") or ""
-            if name and phone:
-                _add(name, phone, "sms_metadata")
+            finally:
+                conn.close()
 
         return list(recovered.values())
 

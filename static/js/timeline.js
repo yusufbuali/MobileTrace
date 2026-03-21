@@ -21,9 +21,6 @@ export async function initTimeline(caseId) {
   _nextCursor = null;
   _activePlatforms = new Set();
   document.getElementById("tl-feed").innerHTML = "";
-  _wirePills();
-  _wireDateJump();
-  _wireLoadMore();
   _fetchAndRender(true).catch(console.error);
 }
 
@@ -203,3 +200,8 @@ function _fmtDuration(secs) {
 function _esc(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+
+// Wire once at module load — type="module" scripts execute after DOM is ready.
+_wirePills();
+_wireDateJump();
+_wireLoadMore();

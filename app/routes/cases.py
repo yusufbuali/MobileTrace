@@ -487,7 +487,7 @@ def get_messages(case_id: str):
 
 
 @bp_cases.get("/cases/<case_id>/contacts")
-def get_contacts(case_id):
+def get_contacts(case_id: str):
     db = get_db()
     if not db.execute("SELECT 1 FROM cases WHERE id=?", (case_id,)).fetchone():
         return jsonify({"error": "not found"}), 404
@@ -500,13 +500,17 @@ def get_contacts(case_id):
 
 def _store_parsed(db, case_id: str, parsed) -> None:
     """Insert ParsedCase artifacts into DB tables."""
+    existing_contacts: set[tuple] = {
+        (r["phone"], r["source_app"])
+        for r in db.execute(
+            "SELECT phone, source_app FROM contacts WHERE case_id=?", (case_id,)
+        ).fetchall()
+    }
     for c in parsed.contacts:
-        existing = db.execute(
-            "SELECT 1 FROM contacts WHERE case_id=? AND phone=? AND source_app=?",
-            (case_id, c["phone"], c["source_app"]),
-        ).fetchone()
-        if existing:
+        key = (c["phone"], c["source_app"])
+        if key in existing_contacts:
             continue
+        existing_contacts.add(key)
         db.execute(
             "INSERT INTO contacts"
             " (case_id, name, phone, email, source_app, raw_json, source)"
