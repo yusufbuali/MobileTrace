@@ -72,6 +72,18 @@ def test_create_annotation_404_case(client):
     assert r.status_code == 404
 
 
+def test_create_annotation_wrong_case_message_id(client):
+    """message_id from a different case should return 404."""
+    case_id_1 = _make_case(client)
+    case_id_2 = _make_case(client)
+    msg_id = _seed_message(case_id_1)  # message belongs to case 1
+    r = client.post(
+        f"/api/cases/{case_id_2}/annotations",  # but POSTing to case 2
+        json={"message_id": msg_id, "tag": "NOTE"},
+    )
+    assert r.status_code == 404
+
+
 # ── List ──────────────────────────────────────────────────────────────────────
 
 def test_list_annotations_empty(client):

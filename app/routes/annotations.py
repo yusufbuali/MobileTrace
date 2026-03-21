@@ -44,6 +44,10 @@ def create_annotation(case_id: str):
 
     if not message_id:
         return jsonify({"error": "message_id required"}), 400
+    if not db.execute(
+        "SELECT id FROM messages WHERE id=? AND case_id=?", (message_id, case_id)
+    ).fetchone():
+        return jsonify({"error": "message not found in this case"}), 404
     if tag not in _VALID_TAGS:
         return jsonify({"error": f"tag must be one of {sorted(_VALID_TAGS)}"}), 400
 
