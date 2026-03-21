@@ -502,7 +502,7 @@ def _store_parsed(db, case_id: str, parsed) -> None:
     """Insert ParsedCase artifacts into DB tables."""
     for c in parsed.contacts:
         db.execute(
-            "INSERT INTO contacts"
+            "INSERT OR IGNORE INTO contacts"
             " (case_id, name, phone, email, source_app, raw_json, source)"
             " VALUES (?,?,?,?,?,?,?)",
             (case_id, c["name"], c["phone"], c["email"],
@@ -529,7 +529,10 @@ def _store_parsed(db, case_id: str, parsed) -> None:
     for mf in getattr(parsed, "media_files", []):
         if mf.get("size_bytes", 0) > 50 * 1024 * 1024:
             continue  # skip files > 50 MB
-        tmp = Path(mf["tmp_path"])
+        tmp_path_val = mf.get("tmp_path")
+        if not tmp_path_val:
+            continue
+        tmp = Path(tmp_path_val)
         if not tmp.exists():
             continue
         ext = tmp.suffix.lower()
