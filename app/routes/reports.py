@@ -240,11 +240,14 @@ def get_report_pdf(case_id: str):
     if ctx is None:
         return jsonify({"error": "not found"}), 404
 
-    html_string = render_template("report.html", **ctx)
-    pdf_bytes = weasyprint.HTML(
-        string=html_string,
-        base_url=request.host_url,
-    ).write_pdf()
+    try:
+        html_string = render_template("report.html", **ctx)
+        pdf_bytes = weasyprint.HTML(
+            string=html_string,
+            base_url=request.host_url,
+        ).write_pdf()
+    except Exception as e:
+        return jsonify({"error": "PDF generation failed", "detail": str(e)}), 500
 
     safe_title = (ctx["case"].get("title") or case_id)[:50]
     safe_title = "".join(c if c.isalnum() or c in " -_" else "_" for c in safe_title)
