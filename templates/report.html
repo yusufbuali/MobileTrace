@@ -340,6 +340,53 @@
   </div>
   {% endif %}
 
+  <!-- ── Annotated Evidence ──────────────────────────────────────────────────── -->
+  {% if annotations %}
+  <div class="panel">
+    <h2>Annotated Evidence</h2>
+    <p style="color:var(--muted);font-size:0.82rem;margin:0 0 14px">
+      {{ annotations|length }} message{{ 's' if annotations|length != 1 else '' }}
+      flagged by the investigator.
+    </p>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Tag</th><th>Platform</th><th>Timestamp</th>
+          <th>Direction</th><th>Sender</th><th>Message</th><th>Note</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for a in annotations %}
+        <tr>
+          <td>
+            {% set tag_colors = {
+              'KEY_EVIDENCE': '#f59e0b',
+              'SUSPICIOUS': '#ef4444',
+              'ALIBI': '#60a5fa',
+              'EXCULPATORY': '#4ade80',
+              'NOTE': '#9fb1c7'
+            } %}
+            <span class="badge" style="background:{{ tag_colors.get(a.tag, '#9fb1c7') }}20;
+              color:{{ tag_colors.get(a.tag, '#9fb1c7') }};
+              border:1px solid {{ tag_colors.get(a.tag, '#9fb1c7') }}40">
+              {{ a.tag | replace('_', ' ') }}
+            </span>
+          </td>
+          <td><span class="badge badge-{{ a.platform or 'unknown' }}">{{ a.platform or '—' }}</span></td>
+          <td class="mono">{{ a.timestamp[:16] if a.timestamp else '—' }}</td>
+          <td>{{ a.direction or '—' }}</td>
+          <td class="mono">{{ a.sender or '—' }}</td>
+          <td style="max-width:300px;word-break:break-word">{{ a.body or '[no body]' }}</td>
+          <td style="color:var(--muted);font-style:{{ 'normal' if a.note else 'italic' }}">
+            {{ a.note or '—' }}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
   <!-- ── AI Analysis Results ────────────────────────────────────────────────── -->
   {% if analysis %}
   <div class="panel">

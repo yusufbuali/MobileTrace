@@ -63,6 +63,27 @@ def get_report(case_id: str):
         (case_id,),
     ).fetchall()
 
+    annotation_rows = db.execute(
+        """
+        SELECT a.id, a.tag, a.note, a.created_at,
+               m.platform, m.thread_id, m.body, m.timestamp, m.direction, m.sender
+        FROM annotations a
+        JOIN messages m ON a.message_id = m.id
+        WHERE a.case_id = ?
+        ORDER BY
+            CASE a.tag
+                WHEN 'KEY_EVIDENCE' THEN 1
+                WHEN 'SUSPICIOUS'   THEN 2
+                WHEN 'ALIBI'        THEN 3
+                WHEN 'EXCULPATORY'  THEN 4
+                ELSE 5
+            END,
+            m.timestamp ASC
+        """,
+        (case_id,),
+    ).fetchall()
+    annotations = [dict(r) for r in annotation_rows]
+
     # Build executive summary from analysis results
     _summary_parts = []
     for a in analysis:
@@ -205,6 +226,7 @@ def get_report(case_id: str):
             "calls": [dict(r) for r in calls],
             "analysis": per_artifact_enhanced,
             "evidence_files": [dict(r) for r in evidence_files],
+            "annotations": annotations,
             "executive_summary": executive_summary,
             "conversation_excerpts": conversation_excerpts,
             "stats": stats,

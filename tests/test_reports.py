@@ -145,3 +145,30 @@ def test_report_rtl_arabic_case(client):
     resp = client.get(f"/api/cases/{case_id}/report")
     assert resp.status_code == 200
     assert b'dir="rtl"' in resp.data
+
+
+def test_report_includes_annotated_evidence_section(client):
+    """Report shows Annotated Evidence section when annotations exist."""
+    from app.database import get_db
+    # Create case
+    r = client.post("/api/cases", json={"title": "Ann Report Test", "officer": "Det"})
+    case_id = r.get_json()["id"]
+    # Seed a message
+    db = get_db()
+    db.execute(
+        "INSERT INTO messages (case_id, platform, direction, sender, recipient, body, timestamp) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (case_id, "whatsapp", "incoming", "Alice", "device", "Key evidence here", "2024-01-01T10:00:00"),
+    )
+    db.commit()
+    msg_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    # Add annotation via API
+    client.post(f"/api/cases/{case_id}/annotations",
+                json={"message_id": msg_id, "tag": "KEY_EVIDENCE", "note": "Critical"})
+    # Get report
+    r2 = client.get(f"/api/cases/{case_id}/report")
+    assert r2.status_code == 200
+    html = r2.data.decode()
+    assert "Annotated Evidence" in html
+    assert "KEY EVIDENCE" in html or "KEY_EVIDENCE" in html
+    assert "Critical" in html
