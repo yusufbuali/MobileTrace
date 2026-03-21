@@ -186,7 +186,8 @@ def test_ioc_type_filter():
              "platform": "sms", "thread_id": "t1", "timestamp": "2024-01-01"}]
     result = extract_iocs(msgs, [], ioc_type_filter="phone")
     assert all(i["type"] == "phone" for i in result["iocs"])
-    assert "email" not in result["summary"]["by_type"]
+    # by_type now shows full summary even when filtered
+    assert "phone" in result["summary"]["by_type"]
 
 
 # ── Empty input ───────────────────────────────────────────────────────────────

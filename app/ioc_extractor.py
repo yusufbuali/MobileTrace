@@ -192,13 +192,13 @@ def extract_iocs(
         _scan_text(contact.get("phone") or "", source, hits)
         _scan_text(contact.get("email") or "", source, hits)
 
-    iocs = list(hits.values())
-    if ioc_type_filter:
-        iocs = [i for i in iocs if i["type"] == ioc_type_filter]
+    all_iocs = list(hits.values())
 
     by_type: dict[str, int] = {}
-    for ioc in iocs:
+    for ioc in all_iocs:
         by_type[ioc["type"]] = by_type.get(ioc["type"], 0) + 1
+
+    iocs = [i for i in all_iocs if i["type"] == ioc_type_filter] if ioc_type_filter else all_iocs
 
     return {
         "iocs": iocs,
