@@ -960,7 +960,6 @@ button[type="button"] { background: var(--surface2); color: var(--text); border:
   box-sizing: border-box;
 }
 .gdb-chart-card canvas { max-height: 200px; }
-.gdb-chart-card--wide { height: 260px; }
 .gdb-chart-title {
   font-size: 0.8rem;
   font-weight: 600;

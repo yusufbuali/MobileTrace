@@ -644,7 +644,7 @@ export async function loadAnalysisResults(caseId) {
         const p = r.result_parsed ? _normalizeAnalysis(r.result_parsed) : null;
         md += `## ${_titleCase(r.artifact_key)}\n\n`;
         if (p) {
-          const rsum = p.risk_level_summary || p.summary || "";
+          const rsum = _toStr(p.risk_level_summary || p.summary || "");
           if (rsum) md += `**Risk Summary:** ${rsum}\n\n`;
           const cra = Array.isArray(p.conversation_risk_assessment) ? p.conversation_risk_assessment : [];
           if (cra.length) {
@@ -720,7 +720,7 @@ function _titleCase(str) {
 
 function _toStr(v) {
   if (typeof v === "string") return v;
-  if (v && typeof v === "object") return v.text || v.summary || v.content || "";
+  if (v && typeof v === "object") return v.text || v.summary || v.content || JSON.stringify(v);
   return String(v || "");
 }
 
@@ -810,7 +810,7 @@ function _renderJsonAnalysis(p, container, artifactKey = "") {
   const platform = artifactKey.split("_")[0] || null; // e.g. "whatsapp" from "whatsapp_messages"
 
   // Risk summary banner
-  const rsum = p.risk_level_summary || p.summary || "";
+  const rsum = _toStr(p.risk_level_summary || p.summary || "");
   if (rsum) {
     const banner = document.createElement("div");
     banner.className = "analysis-risk-banner";
@@ -1423,7 +1423,7 @@ async function _loadMultiRunResults(caseId, runId) {
         const p = r.result_parsed ? _normalizeAnalysis(r.result_parsed) : null;
         md += `## ${_titleCase(r.artifact_key)} (Consensus)\n\n`;
         if (p) {
-          const rsum = p.risk_level_summary || p.summary || "";
+          const rsum = _toStr(p.risk_level_summary || p.summary || "");
           if (rsum) md += `**Risk Summary:** ${rsum}\n\n`;
           const cra = Array.isArray(p.conversation_risk_assessment) ? p.conversation_risk_assessment : [];
           if (cra.length) {
