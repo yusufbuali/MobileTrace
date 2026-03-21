@@ -360,3 +360,8 @@ Surfaces AI analysis intelligence directly on the Overview tab so investigators 
 | Stats bar | 4 KPI chips: Total Contacts, High-Risk, Cross-Platform, Total Interactions |
 | Cross-platform merging | Same phone number in WhatsApp + SMS shown as one node with both platform icons |
 | CSS | ~160 lines `.corr-*` classes; responsive at ≤900px |
+
+## Feature Pack 2 (completed 2026-03-21)
+- **C3** Encrypted contact recovery — iOS/Android parsers recover contacts from WhatsApp/Telegram/SMS metadata when AddressBook is empty; tagged `source='recovered'`
+- **A1** Timeline tab — chronological cross-platform feed with platform filter pills, date jump, cursor pagination, cross-tab navigation
+- **A4** Media thumbnails — image/video thumbnails inline in conversation bubbles with lazy loading, lightbox, and streaming media route
