@@ -5,6 +5,7 @@ import { showToast } from "./toast.js";
 import { initDashboard } from "./dashboard.js";
 import { initCorrelation } from "./correlation.js";
 import { initIoc } from "./ioc.js";
+import { initTimeline } from "./timeline.js";
 
 const caseList = document.getElementById("case-list");
 const searchInput = document.getElementById("search-cases");
@@ -120,6 +121,10 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     if (btn.dataset.tab === "tab-intel" && activeCaseId) {
       initIoc(activeCaseId);
     }
+    // Load timeline when switching to timeline tab
+    if (btn.dataset.tab === "tab-timeline" && activeCaseId) {
+      initTimeline(activeCaseId);
+    }
   });
 });
 
@@ -182,6 +187,10 @@ async function openCase(id) {
     // Refresh intel tab if it is already active
     if (document.querySelector('.tab-btn[data-tab="tab-intel"]')?.classList.contains("active")) {
       initIoc(id);
+    }
+    // Refresh timeline tab if it is already active
+    if (document.querySelector('.tab-btn[data-tab="tab-timeline"]')?.classList.contains("active")) {
+      initTimeline(id);
     }
   } catch (err) {
     document.getElementById("dash-title").textContent = "Error loading case";

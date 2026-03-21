@@ -181,6 +181,7 @@
           <button class="tab-btn active" data-tab="tab-overview" role="tab" aria-selected="true" aria-controls="tab-overview">Overview</button>
           <button class="tab-btn" data-tab="tab-evidence" role="tab" aria-selected="false" aria-controls="tab-evidence">Evidence</button>
           <button class="tab-btn" data-tab="tab-conversations" role="tab" aria-selected="false" aria-controls="tab-conversations">Conversations</button>
+          <button class="tab-btn" data-tab="tab-timeline" role="tab" aria-selected="false" aria-controls="tab-timeline">Timeline</button>
           <button class="tab-btn" data-tab="tab-analysis" role="tab" aria-selected="false" aria-controls="tab-analysis">Analysis</button>
           <button class="tab-btn" data-tab="tab-chat" role="tab" aria-selected="false" aria-controls="tab-chat">Chat</button>
           <button class="tab-btn" data-tab="tab-correlation" role="tab" aria-selected="false" aria-controls="tab-correlation">Correlation</button>
@@ -347,6 +348,25 @@
               </div>
             </div>
           </template>
+        </div>
+
+        <!-- Timeline tab (A1) -->
+        <div id="tab-timeline" class="tab-panel" role="tabpanel">
+          <div class="tl-header">
+            <div class="tl-filter-pills" id="tl-platform-pills">
+              <button class="tl-pill active" data-platform="">All</button>
+              <button class="tl-pill" data-platform="sms">SMS</button>
+              <button class="tl-pill" data-platform="whatsapp">WhatsApp</button>
+              <button class="tl-pill" data-platform="telegram">Telegram</button>
+              <button class="tl-pill" data-platform="signal">Signal</button>
+              <button class="tl-pill" data-platform="calls">Calls</button>
+            </div>
+            <input type="date" id="tl-date-jump" class="tl-date-input" aria-label="Jump to date" />
+          </div>
+          <div id="tl-feed" class="tl-feed"></div>
+          <div id="tl-load-more-wrap" style="text-align:center;padding:16px;display:none">
+            <button id="tl-load-more" class="btn-secondary">Load more</button>
+          </div>
         </div>
 
         <!-- Analysis tab -->
@@ -547,7 +567,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
   <script type="module" src="/static/js/api.js?v=20260308"></script>
-  <script type="module" src="/static/js/cases.js?v=20260308"></script>
+  <script type="module" src="/static/js/cases.js?v=20260321e"></script>
   <script type="module" src="/static/js/chat.js?v=20260321d"></script>
   <script type="module" src="/static/js/conversations.js?v=20260308"></script>
   <script type="module" src="/static/js/toast.js?v=20260308"></script>
@@ -555,5 +575,6 @@
   <script type="module" src="/static/js/correlation.js?v=20260309"></script>
   <script type="module" src="/static/js/dashboard.js?v=20260321d"></script>
   <script type="module" src="/static/js/ioc.js?v=20260321"></script>
+  <script type="module" src="/static/js/timeline.js?v=20260321e"></script>
 </body>
 </html>
