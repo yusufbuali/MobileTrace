@@ -24,9 +24,9 @@ Give investigators a chronological cross-platform view of all messages and calls
   - `cursor_ts` (ISO timestamp string) + `cursor_id` (integer) — composite cursor for tie-safe pagination
   - `limit` (integer, default 100, max 500) — matches existing `GET /api/cases/<id>/messages` cap pattern
   - `platforms` (comma-separated: `sms,whatsapp,telegram,signal,calls`)
-- Merges `messages` and `call_logs` tables via UNION, sorted by `(timestamp ASC, id ASC)`
-- Pagination WHERE clause: `WHERE (timestamp, id) > (cursor_ts, cursor_id)` — composite cursor prevents duplicate rows on timestamp ties
-- Returns: `{ items: [...], next_cursor: { ts: "...", id: 123 } | null }`
+- Merges `messages` and `call_logs` tables via UNION, sorted by `(timestamp ASC, row_key ASC)` where `row_key` is a namespaced string: `'msg-' || id` for messages, `'call-' || id` for calls. This prevents id collision between the two tables (both have `INTEGER PRIMARY KEY AUTOINCREMENT` — ids can overlap).
+- Pagination WHERE clause: `WHERE (timestamp > cursor_ts) OR (timestamp = cursor_ts AND row_key > cursor_key)` — composite cursor with namespaced key prevents duplicate rows on timestamp ties
+- Returns: `{ items: [...], next_cursor: { ts: "...", key: "msg-123" } | null }`
 - Each item shape:
   ```json
   {
@@ -62,7 +62,7 @@ Give investigators a chronological cross-platform view of all messages and calls
   - Message body truncated to 120 chars; click expands to full
   - Risk badge (HIGH / CRITICAL) when platform analysis flagged that level
 - "Load more" button at bottom appends next 100 rows
-- Clicking a message row: dispatch `new CustomEvent('mt:open-thread', { detail: { platform, threadId } })` on `document` — picked up by `conversations.js` listener at line 33. This avoids a direct import cycle between `timeline.js` and `conversations.js`.
+- Clicking a message row: dispatch `new CustomEvent('mt:open-thread', { detail: { platform, thread: threadId } })` on `document` — `thread` matches the key destructured by the live listener in `conversations.js` line 34 (`const { platform, thread } = e.detail`). This avoids a direct import cycle between `timeline.js` and `conversations.js`.
 
 ### Edge Cases
 - No messages: empty state "No messages in this case yet"
@@ -95,7 +95,7 @@ CREATE INDEX IF NOT EXISTS idx_media_files_case    ON media_files(case_id);
 CREATE INDEX IF NOT EXISTS idx_media_files_message ON media_files(message_id);
 ```
 
-Note: `message_id INTEGER` matches `messages.id INTEGER PRIMARY KEY AUTOINCREMENT`. `filepath` stores path **relative to `cases_dir`** (e.g. `"<case_id>/media/<uuid>.jpg"`), resolved at serve time using `app.config['CASES_DIR']`. This avoids stale absolute paths if the volume is remounted.
+Note: `message_id INTEGER` matches `messages.id INTEGER PRIMARY KEY AUTOINCREMENT`. `id` is stored as a lowercase hyphenated UUID string via `str(uuid.uuid4())` — consistent with `evidence_files.id` in `database.py`. `filepath` stores path **relative to `cases_dir`** (e.g. `"<case_id>/media/<uuid>.jpg"`), resolved at serve time using `app.config['CASES_DIR']`. This avoids stale absolute paths if the volume is remounted.
 
 **`ParsedCase` dataclass extension** (`app/parsers/base.py`):
 ```python
@@ -161,19 +161,21 @@ ALTER TABLE contacts ADD COLUMN source TEXT DEFAULT NULL;
 Wrapped in try/except in `init_db()` for idempotency (column already exists → ignore `OperationalError`).
 
 ### `_norm_contact()` Extension (`app/parsers/base.py`)
-Add optional `source` kwarg (default `None`):
+The existing signature is `_norm_contact(name, phone, email, source_app, raw=None)` where `source_app` tracks which parser produced the contact (e.g. `"ios_addressbook"`, `"whatsapp_contacts"`). Add a new **separate** `source` kwarg (default `None`) that tracks whether the contact was recovered vs. directly parsed:
 ```python
-def _norm_contact(name, number, source=None):
-    return { "name": name, "number": _norm_phone(number), "source": source }
+def _norm_contact(name, phone, email, source_app, raw=None, source=None):
+    return { "name": name, "phone": _norm_phone(phone), "email": email,
+             "source_app": source_app, "raw_json": raw, "source": source }
 ```
+`source` is distinct from `source_app` — `source_app` = which parser/table, `source` = `None` (normal) or `'recovered'`.
 
 ### `_store_parsed()` Extension (`app/routes/cases.py`)
-The contacts INSERT must include the `source` column:
+The **existing** contacts INSERT must be updated to include the new `source` column alongside existing columns:
 ```sql
-INSERT OR IGNORE INTO contacts (id, case_id, name, number, source)
-VALUES (?, ?, ?, ?, ?)
+INSERT OR IGNORE INTO contacts (case_id, name, phone, email, source_app, raw_json, source)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 ```
-Pass `c.get('source')` as the fifth value.
+Pass `c.get('source')` as the seventh value (defaults to `None` for all normal contacts — no behaviour change for existing code paths). The C3 recovery logic calls `_norm_contact(..., source='recovered')` and goes through this same INSERT.
 
 ### Recovery Logic (runs when `len(parsed.contacts) == 0` after primary parse)
 
@@ -240,7 +242,7 @@ Approved for planning but out of scope for this implementation cycle:
 **`tests/test_timeline_routes.py`**
 - Timeline returns empty list for case with no messages
 - Timeline merges SMS + WhatsApp rows sorted by timestamp
-- Timeline pagination: page 1 + cursor returns page 2 without duplicates (tests tie-breaking)
+- Timeline pagination: page 1 + cursor (`ts`, `key`) returns page 2 without duplicates even when messages and calls share the same timestamp (tests tie-breaking via namespaced `row_key`)
 - Timeline platform filter: `platforms=sms` excludes WhatsApp rows
 - Timeline limit cap: `limit=9999` clamped to 500
 
