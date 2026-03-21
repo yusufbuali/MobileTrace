@@ -4,6 +4,7 @@ import { initConversations } from "./conversations.js";
 import { showToast } from "./toast.js";
 import { initDashboard } from "./dashboard.js";
 import { initCorrelation } from "./correlation.js";
+import { initIoc } from "./ioc.js";
 
 const caseList = document.getElementById("case-list");
 const searchInput = document.getElementById("search-cases");
@@ -114,6 +115,10 @@ document.querySelectorAll(".tab-btn").forEach(btn => {
     if (btn.dataset.tab === "tab-correlation" && activeCaseId) {
       initCorrelation(activeCaseId);
     }
+    // Load IOC intelligence when switching to intel tab
+    if (btn.dataset.tab === "tab-intel" && activeCaseId) {
+      initIoc(activeCaseId);
+    }
   });
 });
 
@@ -168,6 +173,10 @@ async function openCase(id) {
     // Refresh conversations if that tab is already active
     if (document.querySelector('.tab-btn[data-tab="tab-conversations"]')?.classList.contains("active")) {
       initConversations(id);
+    }
+    // Refresh intel tab if it is already active
+    if (document.querySelector('.tab-btn[data-tab="tab-intel"]')?.classList.contains("active")) {
+      initIoc(id);
     }
   } catch (err) {
     document.getElementById("dash-title").textContent = "Error loading case";
@@ -911,6 +920,15 @@ if (btnTheme) {
 loadCases();
 showView("view-dashboard");
 initDashboard(openCase);
+
+// ── IOC jump-to-thread handler ────────────────────────────────────────────────
+window.addEventListener("mt:jump-to-thread", (e) => {
+  const { platform, thread } = e.detail;
+  document.querySelector('[data-tab="tab-conversations"]')?.click();
+  setTimeout(() => {
+    window.dispatchEvent(new CustomEvent("mt:open-thread", { detail: { platform, thread } }));
+  }, 100);
+});
 
 document.getElementById("btn-brand")?.addEventListener("click", () => {
   activeCaseId = null;

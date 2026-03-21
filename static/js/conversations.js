@@ -26,6 +26,12 @@ export function initConversations(caseId) {
   _wireDateJump();
 }
 
+// Listen for IOC jump-to-thread events dispatched by ioc.js via cases.js
+window.addEventListener("mt:open-thread", (e) => {
+  const { platform, thread } = e.detail;
+  _openThread(platform, thread);
+}, { once: false });
+
 /**
  * Jump to a specific thread and optionally highlight a message.
  */

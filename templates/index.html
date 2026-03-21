@@ -182,6 +182,7 @@
           <button class="tab-btn" data-tab="tab-analysis" role="tab" aria-selected="false" aria-controls="tab-analysis">Analysis</button>
           <button class="tab-btn" data-tab="tab-chat" role="tab" aria-selected="false" aria-controls="tab-chat">Chat</button>
           <button class="tab-btn" data-tab="tab-correlation" role="tab" aria-selected="false" aria-controls="tab-correlation">Correlation</button>
+          <button class="tab-btn" data-tab="tab-intel">Intelligence</button>
         </div>
 
         <!-- Overview tab -->
@@ -457,6 +458,19 @@
           </div>
         </div>
 
+        <!-- ── Intelligence / IOC Tab ─────────────────────────────────────────── -->
+        <div id="tab-intel" class="tab-panel" style="display:none">
+          <div class="intel-header">
+            <h2 class="intel-title">Intelligence — Indicators of Compromise</h2>
+            <button id="btn-ioc-export-csv" class="btn-secondary" style="display:none">&#128196; Export CSV</button>
+          </div>
+          <div id="ioc-summary-bar" class="ioc-summary-bar"></div>
+          <div id="ioc-filter-pills" class="ioc-filter-pills"></div>
+          <div id="ioc-table-wrap" class="ioc-table-wrap">
+            <div class="ioc-empty-state">Open a case to view indicators.</div>
+          </div>
+        </div>
+
         <!-- Chat tab -->
         <div id="tab-chat" class="tab-panel" role="tabpanel">
           <div class="chat-layout">
@@ -520,5 +534,6 @@
   <script type="module" src="/static/js/settings.js?v=20260308"></script>
   <script type="module" src="/static/js/correlation.js?v=20260309"></script>
   <script type="module" src="/static/js/dashboard.js?v=20260308"></script>
+  <script type="module" src="/static/js/ioc.js"></script>
 </body>
 </html>
