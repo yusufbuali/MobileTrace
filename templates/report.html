@@ -348,6 +348,8 @@
   /* Messages table — fixed layout so Body column gets allocated space */
   #messages-table { table-layout: fixed !important; width: 100% !important; }
   #messages-table td { white-space: normal !important; word-break: break-word; }
+  /* Shrink badges so they fit inside narrow columns */
+  #messages-table .badge { font-size: 0.6rem !important; padding: 1px 4px !important; letter-spacing: 0 !important; }
 
   /* Remove overflow wrappers (ignored by WeasyPrint, cause clipping) */
   div[style*="overflow-x"] { overflow: visible !important; }
@@ -674,21 +676,21 @@
     <h2>Messages ({{ messages | length }})</h2>
     <table class="data-table" id="messages-table" style="table-layout:fixed;width:100%">
       <colgroup>
-        <col style="width:14%"><!-- Timestamp -->
-        <col style="width:10%"><!-- Platform -->
+        <col style="width:13%"><!-- Timestamp -->
+        <col style="width:12%"><!-- Platform -->
         <col style="width:5%"> <!-- Dir -->
         <col style="width:12%"><!-- From -->
         <col style="width:12%"><!-- To -->
-        <col style="width:47%"><!-- Body -->
+        <col style="width:46%"><!-- Body -->
       </colgroup>
       <thead>
         <tr>
-          <th style="width:14%">Timestamp</th>
-          <th style="width:10%">Platform</th>
+          <th style="width:13%">Timestamp</th>
+          <th style="width:12%">Platform</th>
           <th style="width:5%">Dir</th>
           <th style="width:12%">From</th>
           <th style="width:12%">To</th>
-          <th style="width:47%">Body</th>
+          <th style="width:46%">Body</th>
         </tr>
       </thead>
       <tbody>
