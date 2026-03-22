@@ -365,3 +365,17 @@ Surfaces AI analysis intelligence directly on the Overview tab so investigators 
 - **C3** Encrypted contact recovery — iOS/Android parsers recover contacts from WhatsApp/Telegram/SMS metadata when AddressBook is empty; tagged `source='recovered'`
 - **A1** Timeline tab — chronological cross-platform feed with platform filter pills, date jump, cursor pagination, cross-tab navigation
 - **A4** Media thumbnails — image/video thumbnails inline in conversation bubbles with lazy loading, lightbox, and streaming media route
+
+## Quick-Create Case Modal (completed 2026-03-23)
+
+**Spec:** `docs/superpowers/specs/2026-03-23-quick-create-modal-design.md`
+**Plan:** `docs/superpowers/plans/2026-03-23-quick-create-modal.md`
+**Commits:** `b89af6f` → `7600cc3`
+
+| Change | Description | Files |
+|--------|-------------|-------|
+| HTML | Replaced `#view-new-case` full-page form with `#modal-new-case` overlay; drop zone, file chip, "More details" collapsible | `templates/index.html` |
+| CSS | Added `.drop-zone`, `.drop-zone--over`, `.file-chip`, `#modal-new-case .modal-box` width override | `static/style.css` |
+| JS | Removed stale `btnCancel`/`formNewCase` consts and old handlers; added `openNewCaseModal()`, `closeNewCaseModal()`, drag-and-drop, two-step create+upload submit with loading states | `static/js/cases.js` |
+
+**Behaviour:** `+ New Case` opens a modal overlay (stays on dashboard). Title is the only required field. Optional evidence drop zone — file attached changes button to "Create & Start Parsing →". Submit creates the case and optionally uploads the file before navigating directly into the new case. Escape/Cancel/backdrop click all close without creating.
