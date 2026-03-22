@@ -661,15 +661,14 @@
   {% if messages %}
   <div class="panel">
     <h2>Messages ({{ messages | length }})</h2>
-    <div style="overflow-x:auto">
-    <table class="data-table" id="messages-table">
+    <table class="data-table" id="messages-table" style="table-layout:fixed;width:100%">
       <colgroup>
-        <col style="width:16%"><!-- Timestamp -->
+        <col style="width:14%"><!-- Timestamp -->
         <col style="width:10%"><!-- Platform -->
         <col style="width:5%"> <!-- Dir -->
         <col style="width:12%"><!-- From -->
         <col style="width:12%"><!-- To -->
-        <col style="width:45%"><!-- Body -->
+        <col style="width:47%"><!-- Body -->
       </colgroup>
       <thead>
         <tr><th>Timestamp</th><th>Platform</th><th>Dir</th><th>From</th><th>To</th><th>Body</th></tr>
@@ -677,17 +676,16 @@
       <tbody>
       {% for m in messages %}
         <tr>
-          <td class="mono" style="font-size:0.75rem">{{ m.timestamp or '—' }}</td>
+          <td class="mono" style="font-size:0.72rem;word-break:break-all;overflow-wrap:anywhere">{{ (m.timestamp or '—')[:16] | replace('T',' ') }}</td>
           <td><span class="badge badge-{{ m.platform }}">{{ m.platform }}</span></td>
           <td><span class="badge badge-{{ 'in' if m.direction == 'incoming' else 'out' }}">{{ '↓' if m.direction == 'incoming' else '↑' }}</span></td>
-          <td class="mono" style="font-size:0.75rem;word-break:break-all">{{ m.sender or '—' }}</td>
-          <td class="mono" style="font-size:0.75rem;word-break:break-all">{{ m.recipient or '—' }}</td>
-          <td style="word-break:break-word">{{ m.body or '' }}</td>
+          <td class="mono" style="font-size:0.72rem;word-break:break-all;overflow-wrap:anywhere">{{ m.sender or '—' }}</td>
+          <td class="mono" style="font-size:0.72rem;word-break:break-all;overflow-wrap:anywhere">{{ m.recipient or '—' }}</td>
+          <td style="word-break:break-word;overflow-wrap:anywhere">{{ m.body or '' }}</td>
         </tr>
       {% endfor %}
       </tbody>
     </table>
-    </div>
   </div>
   {% endif %}
 
