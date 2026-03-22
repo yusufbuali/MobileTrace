@@ -53,6 +53,13 @@ def _build_report_context(db, case_id: str) -> dict | None:
     for r in analysis_rows:
         row = dict(r)
         row["result_parsed"] = _safe_json_parse(row.get("result") or "", _re)
+        # Unwrap single-key wrappers (e.g. {"analysis_report": {...}}) that some
+        # models emit — flatten so the template sees keys at the top level.
+        p = row["result_parsed"] or {}
+        if len(p) == 1:
+            only_val = next(iter(p.values()))
+            if isinstance(only_val, dict):
+                row["result_parsed"] = only_val
         analysis.append(row)
 
     evidence_files = db.execute(

@@ -521,10 +521,13 @@ class MobileAnalyzer:
                 user_prompt=user_prompt,
                 max_tokens=8192,
             )
+            info = self.provider.get_model_info()
+            provider_str = info.get("provider", "unknown")
+            model_str = info.get("model", "")
             return {
                 "artifact_key": artifact_key,
                 "result": text,
-                "provider": self.provider.get_model_info().get("provider", "unknown"),
+                "provider": f"{provider_str} · {model_str}" if model_str else provider_str,
             }
         except AIProviderError as exc:
             return {

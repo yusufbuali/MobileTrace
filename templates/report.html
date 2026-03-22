@@ -609,6 +609,41 @@
           {% endfor %}
           {% endif %}
 
+          {# ── Contact risk assessment (SMS / per-contact view) ── #}
+          {% set cra2 = p.get('contact_risk_assessment', []) %}
+          {% if cra2 %}
+          <div class="section-label" style="margin-top:14px;margin-bottom:8px">Contact Risk Assessment</div>
+          {% for c in cra2 %}
+          {% set rl = c.get('risk_level', '') | upper %}
+          <div class="thread-card">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px">
+              <span class="thread-id">{{ c.get('phone_number', c.get('contact', '—')) }}</span>
+              {% if rl %}<span class="risk-badge risk-{{ rl }}">{{ rl }}</span>{% endif %}
+            </div>
+            {% set rs = c.get('risk_score', 0) | int %}
+            <div class="risk-bar-wrap">
+              <div class="risk-bar-track">
+                <div class="risk-bar-fill {% if rs >= 7 %}score-high{% elif rs >= 4 %}score-medium{% else %}score-low{% endif %}"
+                     style="width:{{ (rs * 10) | int }}%"></div>
+              </div>
+              <span class="risk-score-num">{{ rs }}/10</span>
+            </div>
+            <div class="thread-stats">
+              <span>&#128172; <strong>{{ c.get('messages', '—') }}</strong> msgs</span>
+              <span>&#8593; <strong>{{ c.get('sent', '—') }}</strong> sent</span>
+              <span>&#8595; <strong>{{ c.get('received', '—') }}</strong> recv</span>
+            </div>
+            {% set ind = c.get('indicators', '') %}
+            {% if ind %}
+            <ul class="indicators-list">
+              {% if ind is string %}<li>{{ ind }}</li>
+              {% else %}{% for i in ind %}<li>{{ i }}</li>{% endfor %}{% endif %}
+            </ul>
+            {% endif %}
+          </div>
+          {% endfor %}
+          {% endif %}
+
           {# ── Key findings ── #}
           {% set kf = p.get('key_findings') %}
           {% if kf and kf is mapping %}
@@ -633,7 +668,7 @@
           {% endif %}
 
           {# ── Fallback: render remaining top-level keys as kv ── #}
-          {% set shown_keys = ['conversation_risk_assessment','key_findings','risk_level_summary','risk_level','confidence_level'] %}
+          {% set shown_keys = ['conversation_risk_assessment','contact_risk_assessment','key_findings','risk_level_summary','risk_level','confidence_level','confidence'] %}
           {% for k, v in p.items() %}
           {% if k not in shown_keys %}
           <div class="json-section">
@@ -641,11 +676,27 @@
             {% if v is mapping %}
               <div class="json-kv">
               {% for sk, sv in v.items() %}
-                <span class="jk">{{ sk | replace('_',' ') }}</span><span class="jv">{{ sv }}</span>
+                <span class="jk">{{ sk | replace('_',' ') }}</span>
+                <span class="jv">
+                  {% if sv is mapping %}{{ sv.values() | list | join(' · ') }}
+                  {% elif sv is iterable and sv is not string %}{{ sv | join(', ') }}
+                  {% else %}{{ sv }}{% endif %}
+                </span>
               {% endfor %}
               </div>
             {% elif v is iterable and v is not string %}
-              <ul class="indicators-list">{% for item in v %}<li>{{ item }}</li>{% endfor %}</ul>
+              {% for item in v %}
+                {% if item is mapping %}
+                <div class="json-kv" style="background:rgba(255,255,255,0.02);border-radius:6px;padding:5px 8px;margin-bottom:5px">
+                {% for sk, sv in item.items() %}
+                  <span class="jk">{{ sk | replace('_',' ') }}</span>
+                  <span class="jv">{% if sv is iterable and sv is not string %}{{ sv | join(', ') }}{% else %}{{ sv }}{% endif %}</span>
+                {% endfor %}
+                </div>
+                {% else %}
+                <div style="font-size:0.82rem;padding:1px 0">{{ item }}</div>
+                {% endif %}
+              {% endfor %}
             {% else %}
               <div style="font-size:0.82rem;color:var(--text)">{{ v }}</div>
             {% endif %}
