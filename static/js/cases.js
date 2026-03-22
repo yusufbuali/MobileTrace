@@ -11,8 +11,6 @@ const caseList = document.getElementById("case-list");
 const searchInput = document.getElementById("search-cases");
 const filterStatus = document.getElementById("filter-status");
 const btnNewCase = document.getElementById("btn-new-case");
-const btnCancel = document.getElementById("btn-cancel-case");
-const formNewCase = document.getElementById("form-new-case");
 const btnAnalyze = document.getElementById("btn-analyze");
 const btnReport = document.getElementById("btn-report");
 const btnReportPdf = document.getElementById("btn-report-pdf");
@@ -904,28 +902,134 @@ async function _importSelected() {
   }
 }
 
-// ── New case form ─────────────────────────────────────────────────────────────
+// ── New case modal ────────────────────────────────────────────────────────────
 
-btnNewCase?.addEventListener("click", () => showView("view-new-case"));
-btnCancel?.addEventListener("click", () => showView("view-dashboard"));
 searchInput?.addEventListener("input", filterCases);
 filterStatus?.addEventListener("change", loadCases);
+
+const modalNewCase  = document.getElementById("modal-new-case");
+const formNewCase   = document.getElementById("form-new-case");
+const dropZone      = document.getElementById("new-case-drop-zone");
+const fileInput     = document.getElementById("new-case-file-input");
+const fileChip      = document.getElementById("new-case-file-chip");
+const fileChipName  = document.getElementById("new-case-file-name");
+const fileChipSize  = document.getElementById("new-case-file-size");
+const btnRemoveFile = document.getElementById("btn-new-case-remove-file");
+const btnSubmitNew  = document.getElementById("btn-new-case-submit");
+const newCaseError  = document.getElementById("new-case-error");
+
+let _pendingFile = null;
+
+function _setFile(file) {
+  _pendingFile = file;
+  fileChipName.textContent = file.name;
+  fileChipSize.textContent = fmtBytes(file.size);
+  fileChip.style.display = "flex";
+  dropZone.style.display = "none";
+  btnSubmitNew.textContent = "Create & Start Parsing \u2192";
+}
+
+function _clearFile() {
+  _pendingFile = null;
+  fileInput.value = "";
+  fileChip.style.display = "none";
+  dropZone.style.display = "";
+  btnSubmitNew.textContent = "Create Case";
+}
+
+function openNewCaseModal() {
+  formNewCase.reset();
+  _clearFile();
+  newCaseError.style.display = "none";
+  newCaseError.textContent = "";
+  document.getElementById("new-case-details").removeAttribute("open");
+  modalNewCase.style.display = "flex";
+  document.getElementById("new-case-title").focus();
+  document.addEventListener("keydown", _onEscape);
+}
+
+function closeNewCaseModal() {
+  modalNewCase.style.display = "none";
+  document.removeEventListener("keydown", _onEscape);
+}
+
+function _onEscape(e) {
+  if (e.key === "Escape") closeNewCaseModal();
+}
+
+modalNewCase?.addEventListener("click", (e) => {
+  if (e.target === modalNewCase) closeNewCaseModal();
+});
+
+document.getElementById("btn-new-case-close")?.addEventListener("click", closeNewCaseModal);
+document.getElementById("btn-new-case-cancel")?.addEventListener("click", closeNewCaseModal);
+btnNewCase?.addEventListener("click", openNewCaseModal);
+
+dropZone?.addEventListener("click", () => fileInput.click());
+dropZone?.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") fileInput.click(); });
+fileInput?.addEventListener("change", () => { if (fileInput.files[0]) _setFile(fileInput.files[0]); });
+btnRemoveFile?.addEventListener("click", _clearFile);
+
+dropZone?.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("drop-zone--over"); });
+dropZone?.addEventListener("dragleave", () => dropZone.classList.remove("drop-zone--over"));
+dropZone?.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropZone.classList.remove("drop-zone--over");
+  const file = e.dataTransfer.files[0];
+  if (file) _setFile(file);
+});
 
 formNewCase?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(formNewCase);
-  const body = { title: fd.get("title"), officer: fd.get("officer"), case_number: fd.get("case_number") };
+  const body = {
+    title: fd.get("title").trim(),
+    officer: (fd.get("officer") || "").trim() || undefined,
+    case_number: (fd.get("case_number") || "").trim() || undefined,
+  };
+
+  newCaseError.style.display = "none";
+  btnSubmitNew.disabled = true;
+  const origLabel = btnSubmitNew.textContent;
+  btnSubmitNew.textContent = "Creating\u2026";
+
+  let newCase;
   try {
-    const c = await api.createCase(body);
-    allCases.unshift(c);
-    activeCaseId = c.id;
-    filterCases();
-    showView("view-case-dashboard");
-    openCase(c.id);
-    formNewCase.reset();
+    newCase = await api.createCase(body);
   } catch (err) {
-    showToast("Failed to create case: " + err.message, "error");
+    newCaseError.textContent = "Failed to create case: " + err.message;
+    newCaseError.style.display = "block";
+    btnSubmitNew.disabled = false;
+    btnSubmitNew.textContent = origLabel;
+    return;
   }
+
+  if (_pendingFile) {
+    btnSubmitNew.textContent = "Uploading\u2026";
+    try {
+      const uploadFd = new FormData();
+      uploadFd.append("file", _pendingFile);
+      await fetch(`/api/cases/${newCase.id}/evidence`, { method: "POST", body: uploadFd });
+    } catch (_) {
+      allCases.unshift(newCase);
+      activeCaseId = newCase.id;
+      filterCases();
+      closeNewCaseModal();
+      openCase(newCase.id);
+      showToast("Case created. Evidence upload failed — try again from the Evidence tab.", "error");
+      btnSubmitNew.disabled = false;
+      btnSubmitNew.textContent = origLabel;
+      return;
+    }
+  }
+
+  allCases.unshift(newCase);
+  activeCaseId = newCase.id;
+  filterCases();
+  closeNewCaseModal();
+  openCase(newCase.id);
+  btnSubmitNew.disabled = false;
+  btnSubmitNew.textContent = origLabel;
 });
 
 // ── Sidebar toggle (mobile) ──────────────────────────────────────────────────
