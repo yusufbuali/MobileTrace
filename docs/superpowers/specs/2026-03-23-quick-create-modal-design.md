@@ -77,14 +77,21 @@ Replace the full-page new-case view with a **modal overlay** that:
 | File | Change |
 |---|---|
 | `templates/index.html` | Remove `#view-new-case` div; add `#modal-new-case` overlay |
-| `static/css/style.css` (or equivalent) | Add modal styles: backdrop, box, drop zone states |
+| `static/style.css` | Add modal styles: backdrop, box, drop zone states |
 | `static/js/cases.js` | Replace `showView("view-new-case")` with `openNewCaseModal()`; add drag-and-drop handler + file state; update submit logic |
 
 ### Key JS changes
-- `btnNewCase` click → `openNewCaseModal()` instead of `showView("view-new-case")`
-- `openNewCaseModal()` shows `#modal-new-case`, sets focus on title input, wires up drag-and-drop
-- Submit handler: creates case → if file, uploads → navigates to new case
-- `closeNewCaseModal()` hides modal, resets form state
+- Remove the `formNewCase` const (currently `document.getElementById("form-new-case")`) and its `submit` event listener (lines ~914–929 in `cases.js`) — the old form is gone.
+- Remove the `btnCancel` const (`#btn-cancel-case`) and its `click` handler that calls `showView("view-dashboard")` — the modal handles its own cancel.
+- `btnNewCase` click → `openNewCaseModal()` instead of `showView("view-new-case")`.
+- `openNewCaseModal()` shows `#modal-new-case`, sets focus on title input, wires up drag-and-drop, binds Escape key to `closeNewCaseModal()`.
+- The cancel button inside the new modal must close it via `closeNewCaseModal()` (use any element ID, but update the JS to match).
+- Submit handler:
+  1. Disable submit button, show spinner / "Creating…" text.
+  2. `POST /api/cases` → get `newId`.
+  3. If file selected: `POST /api/cases/<newId>/evidence` (multipart). Keep button disabled + show "Uploading…" during this step.
+  4. Re-enable button and close modal only after both requests complete (or on error — see error handling above).
+- `closeNewCaseModal()` hides modal, resets form state (clears title, drops file, collapses "More details").
 
 ### CSS requirements
 - `.modal-backdrop`: fixed, full-screen, `background: rgba(0,0,0,0.7)`, `backdrop-filter: blur(4px)`
@@ -104,4 +111,7 @@ Replace the full-page new-case view with a **modal overlay** that:
 6. "More details" toggle expands/collapses the extra fields; their values are sent on submit if filled
 7. If creation fails, an error appears inside the modal (it stays open)
 8. Post-creation navigation lands on the new case's Overview tab
-9. No regression: existing case-open flow, evidence upload from Evidence tab, and all other tabs work as before
+9. No regression checklist:
+   - Existing cases open correctly from the sidebar and dashboard table
+   - Evidence tab upload (file form, path import, folder scan) still functions on open cases
+   - Back-navigation to the dashboard still works
