@@ -223,38 +223,144 @@
 
 /* ── Print / WeasyPrint ───────────────────────────────────────────────────── */
 @media print {
+  /* Base reset */
   body {
     background: #ffffff !important;
-    color: #000000 !important;
+    color: #111827 !important;
     font-size: 10pt;
+    line-height: 1.5;
+    padding: 0;
   }
+  .shell { gap: 14pt; }
+
+  /* Panels */
   .panel {
-    background: #f8f9fa !important;
-    border: 1px solid #cccccc !important;
+    background: #f9fafb !important;
+    border: 1px solid #d1d5db !important;
+    box-shadow: none !important;
     page-break-inside: avoid;
-    margin-bottom: 12pt;
+    margin-bottom: 14pt;
   }
-  h1, h2, h3 { color: #000000 !important; page-break-after: avoid; }
+  .panel-alt { background: #f2f4f7 !important; border: 1px solid #e5e7eb !important; }
+
+  /* Typography */
+  h1 { color: #111827 !important; }
+  h2 { color: #1f2937 !important; border-bottom-color: #d1d5db !important; page-break-after: avoid; }
+  h3 { color: #1d4ed8 !important; page-break-after: avoid; }
+  .section-label, .report-subtitle, .summary-provider { color: #6b7280 !important; }
+  .report-classification { color: #1d4ed8 !important; border-color: #93c5fd !important; background: #eff6ff !important; }
+
+  /* Stat cards */
+  .stat-card { background: #f2f4f7 !important; border: 1px solid #d1d5db !important; }
+  .stat-card .sv { color: #1d4ed8 !important; }
+  .stat-card .sl { color: #6b7280 !important; }
+
+  /* Tables */
+  table { border-collapse: collapse; page-break-inside: auto; }
+  tr { page-break-inside: avoid; }
+  th, td { border: 1px solid #d1d5db !important; color: #111827 !important; }
+  th { background: #f2f4f7 !important; }
+  .kv-table td:first-child { color: #6b7280 !important; }
+  a { color: #111827 !important; text-decoration: none; }
+
+  /* Badges — preserve color in print */
   .badge, .risk-badge, .confidence-inline {
-    -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
-  /* Hide interactive / decorative elements */
-  details > summary::marker { display: none; }
-  .panel-alt { background: #f0f0f0 !important; }
-  table { border-collapse: collapse; }
-  th, td { border: 1px solid #cccccc !important; color: #000000 !important; }
-  th { background: #e8e8e8 !important; }
-  a { color: #000000 !important; text-decoration: none; }
+  .risk-CRITICAL { background: #fee2e2 !important; color: #991b1b !important; border-color: #fca5a5 !important; }
+  .risk-HIGH     { background: #ffedd5 !important; color: #9a3412 !important; border-color: #fdba74 !important; }
+  .risk-MEDIUM   { background: #fef9c3 !important; color: #854d0e !important; border-color: #fde047 !important; }
+  .risk-LOW      { background: #dbeafe !important; color: #1e40af !important; border-color: #93c5fd !important; }
+  .badge-whatsapp { background: #d1fae5 !important; color: #065f46 !important; }
+  .badge-telegram { background: #dbeafe !important; color: #1e40af !important; }
+  .badge-signal   { background: #ede9fe !important; color: #5b21b6 !important; }
+  .badge-sms      { background: #e0f2fe !important; color: #075985 !important; }
+  .badge-in       { background: #d1fae5 !important; color: #065f46 !important; }
+  .badge-out      { background: #dbeafe !important; color: #1e40af !important; }
+  .badge-missed   { background: #fef9c3 !important; color: #854d0e !important; }
+
+  /* Risk bars */
+  .risk-bar-fill { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .risk-bar-track { background: #e5e7eb !important; }
+  .risk-score-num { color: #111827 !important; }
+
+  /* Risk summary banner */
+  .risk-summary-banner { background: #fff7ed !important; border-color: #fdba74 !important; }
+  .risk-summary-banner p { color: #111827 !important; }
+
+  /* Analysis cards — force open in print */
+  details.analysis-card { background: #f9fafb !important; border-color: #d1d5db !important; }
+  details.analysis-card summary { background: #f2f4f7 !important; color: #111827 !important; }
+  details.analysis-card summary::after { display: none; }
+  details > :not(summary) { display: block !important; }  /* expand all <details> */
+
+  /* Thread cards */
+  .thread-card { background: #f9fafb !important; border-color: #d1d5db !important; }
+  .thread-id, .thread-stats { color: #4b5563 !important; }
+  .thread-stats span strong { color: #111827 !important; }
+
+  /* Key findings */
+  .findings-block { background: #eff6ff !important; border-color: #bfdbfe !important; }
+  .findings-block p { color: #111827 !important; }
+  .key-message { background: #f9fafb !important; border-left-color: #f97316 !important; }
+  .key-message .km-time { color: #6b7280 !important; }
+
+  /* Chat bubbles */
+  .chat-thread { background: #f9fafb !important; border-color: #d1d5db !important; page-break-inside: avoid; }
+  .chat-thread-header { background: #f2f4f7 !important; border-bottom-color: #d1d5db !important; }
+  .chat-title { color: #111827 !important; }
+  .chat-meta { color: #6b7280 !important; }
+  .msg-bubble { color: #111827 !important; }
+  .msg-sent     { background: #dbeafe !important; border-color: #93c5fd !important; }
+  .msg-received { background: #f2f4f7 !important; border-color: #d1d5db !important; }
+  .msg-sender { color: #1d4ed8 !important; }
+  .msg-time   { color: #6b7280 !important; }
+  .platform-section-title { color: #6b7280 !important; }
+
+  /* JSON / markdown */
+  .json-kv .jk { color: #6b7280 !important; }
+  .json-kv .jv { color: #111827 !important; }
+  pre.json-raw { background: #f2f4f7 !important; border-color: #d1d5db !important; color: #374151 !important; }
+  .markdown-output { color: #111827 !important; }
+  .markdown-output code { background: #f2f4f7 !important; border-color: #d1d5db !important; color: #111827 !important; }
+  .markdown-output pre  { background: #f2f4f7 !important; border-color: #d1d5db !important; }
+  .confidence-critical { color: #991b1b !important; background: #fee2e2 !important; print-color-adjust: exact; }
+  .confidence-high     { color: #9a3412 !important; background: #ffedd5 !important; print-color-adjust: exact; }
+  .confidence-medium   { color: #854d0e !important; background: #fef9c3 !important; print-color-adjust: exact; }
+  .confidence-low      { color: #1e40af !important; background: #dbeafe !important; print-color-adjust: exact; }
+
+  /* Page breaks */
+  p, li { orphans: 3; widows: 3; }
+  .analysis-card  { page-break-inside: avoid; }
+
+  /* Hide D3 graph — JS doesn't execute in WeasyPrint */
+  .graph-container, #graph { display: none !important; }
 }
 
 @page {
   size: A4;
-  margin: 15mm 15mm 20mm 15mm;
+  margin: 20mm 15mm 22mm 15mm;
+  @top-left {
+    content: "MobileTrace Forensic Report";
+    font-size: 7pt;
+    color: #9ca3af;
+  }
+  @top-right {
+    content: "CONFIDENTIAL";
+    font-size: 7pt;
+    color: #9ca3af;
+    font-weight: bold;
+  }
   @bottom-center {
-    content: "MobileTrace Report — Page " counter(page) " of " counter(pages);
+    content: "Page " counter(page) " of " counter(pages);
     font-size: 8pt;
-    color: #666666;
+    color: #6b7280;
+  }
+  @bottom-right {
+    content: "MobileTrace Intelligence Platform";
+    font-size: 7pt;
+    color: #9ca3af;
   }
 }
   </style>
@@ -579,7 +685,7 @@
       <tbody>
       {% for c in contacts %}
         <tr>
-          <td>{{ c.name or '—' }}</td>
+          <td>{{ c.name or '—' }}{% if c.source == 'recovered' %} <span style="color:#6b7280;font-size:0.8em">(recovered)</span>{% endif %}</td>
           <td class="mono">{{ c.phone or '—' }}</td>
           <td class="mono">{{ c.email or '—' }}</td>
           <td>{{ c.source_app or '—' }}</td>

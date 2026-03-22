@@ -33,7 +33,7 @@ def _build_report_context(db, case_id: str) -> dict | None:
     ).fetchall()
 
     contacts = db.execute(
-        "SELECT name, phone, email, source_app FROM contacts WHERE case_id=? ORDER BY name ASC",
+        "SELECT name, phone, email, source_app, source FROM contacts WHERE case_id=? ORDER BY name ASC",
         (case_id,),
     ).fetchall()
 
