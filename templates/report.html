@@ -630,9 +630,13 @@
             {% set ki = t.get('key_indicators', []) %}
             {% if ki %}
             <ul class="indicators-list">
-              {% for ind in ki %}
-                <li>{% if ind is mapping %}{{ render_any(ind, 1) }}{% else %}{{ ind }}{% endif %}</li>
-              {% endfor %}
+              {% if ki is string %}
+                <li>{{ ki }}</li>
+              {% else %}
+                {% for ind in ki %}
+                  <li>{% if ind is mapping %}{{ render_any(ind, 1) }}{% else %}{{ ind }}{% endif %}</li>
+                {% endfor %}
+              {% endif %}
             </ul>
             {% endif %}
           </div>
