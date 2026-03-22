@@ -67,11 +67,11 @@ def _build_report_context(db, case_id: str) -> dict | None:
         p = a.get("result_parsed") or {}
         rsum = p.get("risk_level_summary") or p.get("executive_summary") or p.get("summary")
         if rsum:
-            _summary_parts.append(f"**{a['artifact_key'].title()}:** {rsum}")
+            _summary_parts.append(f"### {a['artifact_key'].title()}\n\n{rsum}")
         elif a.get("result") and not p:
             snippet = str(a["result"])[:300].strip()
             if snippet:
-                _summary_parts.append(f"**{a['artifact_key'].title()}:** {snippet}")
+                _summary_parts.append(f"### {a['artifact_key'].title()}\n\n{snippet}")
     executive_summary = "\n\n".join(_summary_parts)
 
     # Conversation excerpts
