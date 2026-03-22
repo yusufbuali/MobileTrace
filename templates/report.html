@@ -334,6 +334,13 @@
   p, li { orphans: 3; widows: 3; }
   .analysis-card  { page-break-inside: avoid; }
 
+  /* Messages table — fixed layout so Body column gets allocated space */
+  #messages-table { table-layout: fixed !important; width: 100% !important; }
+  #messages-table td { white-space: normal !important; word-break: break-word; }
+
+  /* Remove overflow wrappers (ignored by WeasyPrint, cause clipping) */
+  div[style*="overflow-x"] { overflow: visible !important; }
+
   /* Hide D3 graph — JS doesn't execute in WeasyPrint */
   .graph-container, #graph { display: none !important; }
 }
@@ -655,19 +662,27 @@
   <div class="panel">
     <h2>Messages ({{ messages | length }})</h2>
     <div style="overflow-x:auto">
-    <table class="data-table">
+    <table class="data-table" id="messages-table">
+      <colgroup>
+        <col style="width:16%"><!-- Timestamp -->
+        <col style="width:10%"><!-- Platform -->
+        <col style="width:5%"> <!-- Dir -->
+        <col style="width:12%"><!-- From -->
+        <col style="width:12%"><!-- To -->
+        <col style="width:45%"><!-- Body -->
+      </colgroup>
       <thead>
         <tr><th>Timestamp</th><th>Platform</th><th>Dir</th><th>From</th><th>To</th><th>Body</th></tr>
       </thead>
       <tbody>
       {% for m in messages %}
         <tr>
-          <td style="white-space:nowrap" class="mono">{{ m.timestamp or '—' }}</td>
+          <td class="mono" style="font-size:0.75rem">{{ m.timestamp or '—' }}</td>
           <td><span class="badge badge-{{ m.platform }}">{{ m.platform }}</span></td>
           <td><span class="badge badge-{{ 'in' if m.direction == 'incoming' else 'out' }}">{{ '↓' if m.direction == 'incoming' else '↑' }}</span></td>
-          <td class="mono">{{ m.sender or '—' }}</td>
-          <td class="mono">{{ m.recipient or '—' }}</td>
-          <td>{{ m.body or '' }}</td>
+          <td class="mono" style="font-size:0.75rem;word-break:break-all">{{ m.sender or '—' }}</td>
+          <td class="mono" style="font-size:0.75rem;word-break:break-all">{{ m.recipient or '—' }}</td>
+          <td style="word-break:break-word">{{ m.body or '' }}</td>
         </tr>
       {% endfor %}
       </tbody>
