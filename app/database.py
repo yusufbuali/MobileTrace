@@ -10,7 +10,6 @@ _local = threading.local()
 _db_path: str = "data/mobiletrace.db"
 
 _SCHEMA = """
-PRAGMA journal_mode=WAL;
 PRAGMA foreign_keys=ON;
 
 CREATE TABLE IF NOT EXISTS analysis_runs (
