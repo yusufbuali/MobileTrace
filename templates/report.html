@@ -386,6 +386,34 @@
   </style>
 </head>
 <body>
+{# ── render_any: safely render any JSON value without Python repr leakage ── #}
+{% macro render_any(v, depth=0) %}
+  {%- if v is mapping -%}
+    {%- if depth >= 3 -%}
+      <span class="jv" style="color:var(--muted);font-style:italic">[nested object]</span>
+    {%- else -%}
+      <div class="json-kv" style="{% if depth > 0 %}background:rgba(255,255,255,0.02);border-radius:6px;padding:4px 8px;margin-bottom:4px;{% endif %}">
+        {%- for sk, sv in v.items() -%}
+          <span class="jk">{{ sk | replace('_', ' ') }}</span>
+          <span class="jv">{{ render_any(sv, depth + 1) }}</span>
+        {%- endfor -%}
+      </div>
+    {%- endif -%}
+  {%- elif v is iterable and v is not string -%}
+    {%- set items = v | list -%}
+    {%- if items | length == 0 -%}
+    {%- elif items[0] is mapping -%}
+      {%- for item in items -%}{{ render_any(item, depth) }}{%- endfor -%}
+    {%- else -%}
+      <ul class="indicators-list" style="margin:0">
+        {%- for item in items -%}<li>{{ item }}</li>{%- endfor -%}
+      </ul>
+    {%- endif -%}
+  {%- elif v is none or v == '' -%}
+  {%- else -%}
+    {{- v -}}
+  {%- endif -%}
+{% endmacro %}
 <div class="shell">
 
   <!-- ── Report Header ──────────────────────────────────────────────────────── -->
@@ -571,7 +599,7 @@
           {% set rsum = p.get('risk_level_summary') %}
           {% if rsum %}
           <div class="risk-summary-banner">
-            <p>{{ rsum }}</p>
+            {% if rsum is string %}<p>{{ rsum }}</p>{% else %}{{ render_any(rsum, 0) }}{% endif %}
           </div>
           {% endif %}
 
@@ -602,7 +630,9 @@
             {% set ki = t.get('key_indicators', []) %}
             {% if ki %}
             <ul class="indicators-list">
-              {% for ind in ki %}<li>{{ ind }}</li>{% endfor %}
+              {% for ind in ki %}
+                <li>{% if ind is mapping %}{{ render_any(ind, 1) }}{% else %}{{ ind }}{% endif %}</li>
+              {% endfor %}
             </ul>
             {% endif %}
           </div>
@@ -637,7 +667,7 @@
             {% if ind %}
             <ul class="indicators-list">
               {% if ind is string %}<li>{{ ind }}</li>
-              {% else %}{% for i in ind %}<li>{{ i }}</li>{% endfor %}{% endif %}
+              {% else %}{% for i in ind %}<li>{% if i is mapping %}{{ render_any(i, 1) }}{% else %}{{ i }}{% endif %}</li>{% endfor %}{% endif %}
             </ul>
             {% endif %}
           </div>
@@ -665,6 +695,16 @@
           {% if kf_note %}
           <div class="findings-block"><p>{{ kf_note }}</p></div>
           {% endif %}
+          {# ── Render remaining key_findings sub-keys not handled above ── #}
+          {% set kf_handled = ['top_significant_conversations', 'note'] %}
+          {% for kfk, kfv in kf.items() %}
+            {% if kfk not in kf_handled and kfv %}
+            <div class="json-section">
+              <div class="json-section-title">{{ kfk | replace('_', ' ') }}</div>
+              {{ render_any(kfv, 0) }}
+            </div>
+            {% endif %}
+          {% endfor %}
           {% endif %}
 
           {# ── Fallback: render remaining top-level keys as kv ── #}
@@ -677,11 +717,7 @@
               <div class="json-kv">
               {% for sk, sv in v.items() %}
                 <span class="jk">{{ sk | replace('_',' ') }}</span>
-                <span class="jv">
-                  {% if sv is mapping %}{{ sv.values() | list | join(' · ') }}
-                  {% elif sv is iterable and sv is not string %}{{ sv | join(', ') }}
-                  {% else %}{{ sv }}{% endif %}
-                </span>
+                <span class="jv">{{ render_any(sv, 1) }}</span>
               {% endfor %}
               </div>
             {% elif v is iterable and v is not string %}
@@ -690,7 +726,7 @@
                 <div class="json-kv" style="background:rgba(255,255,255,0.02);border-radius:6px;padding:5px 8px;margin-bottom:5px">
                 {% for sk, sv in item.items() %}
                   <span class="jk">{{ sk | replace('_',' ') }}</span>
-                  <span class="jv">{% if sv is iterable and sv is not string %}{{ sv | join(', ') }}{% else %}{{ sv }}{% endif %}</span>
+                  <span class="jv">{{ render_any(sv, 2) }}</span>
                 {% endfor %}
                 </div>
                 {% else %}
