@@ -54,14 +54,17 @@ MobileTrace parses forensic extractions from seized mobile devices, normalizes e
 git clone https://github.com/yusufbuali/MobileTrace.git
 cd MobileTrace
 
-# Configure your AI provider (see Configuration below)
-cp config.yaml.example config.yaml   # or edit config.yaml directly
+# Copy the example config and add your AI provider key
+cp config.yaml.example config.yaml
+# Edit config.yaml — set your API key and preferred provider
 
 docker-compose up --build
 ```
 
 Open **http://localhost:5001** in your browser.
 
+> **`config.yaml` is git-ignored** — your API keys are never committed to the repository.
+>
 > The `docker-compose.yml` bind-mounts `./app`, `./templates`, and `./static` into the container, so code changes take effect immediately without a rebuild.
 
 ### Local Development
@@ -168,7 +171,8 @@ MobileTrace/
 │       └── ...
 ├── prompts/                 # LLM system prompt + per-artifact analysis prompts
 ├── tests/                   # pytest test suite (~200 tests)
-├── config.yaml              # Runtime configuration
+├── evidence/                # Drop evidence archives here (git-ignored, mounted into container)
+├── config.yaml.example      # Template — copy to config.yaml and add your API key
 └── docker-compose.yml
 ```
 
@@ -177,6 +181,50 @@ MobileTrace/
 - All message/contact/call data is normalised to a common schema regardless of source platform
 - Analysis runs in a background thread pool; SSE streams per-artifact progress to the browser
 - FTS5 virtual tables on `messages` and `contacts` power sub-second full-text retrieval for the chat endpoint
+
+---
+
+## Test Evidence
+
+Public forensic images are available to try the full import → parse → analyse workflow without needing real case data.
+
+### Import without duplicating files
+
+Forensic archives are large. MobileTrace offers three import modes:
+
+| Mode | Location in UI | Copies the archive? |
+|---|---|---|
+| File upload (drag-and-drop) | Evidence tab → File Upload | ✅ Uploads a copy into the Docker volume |
+| **Path import** | Evidence tab → Path Import | ❌ Reads in-place — no copy |
+| **Folder scan** | Evidence tab → Folder Scan | ❌ Reads in-place — no copy |
+
+**Best practice:** place your downloaded archives in the `evidence/` folder at the project root. This folder is already mounted read-only into the container by `docker-compose.yml`:
+
+```yaml
+- ./evidence:/opt/mobiletrace/evidence:ro
+```
+
+Then use **Path Import** and enter `/opt/mobiletrace/evidence/<filename>`. MobileTrace reads the archive directly from disk and extracts only the SQLite databases (~MB) into the case directory. The original multi-GB archive is never duplicated.
+
+If your evidence files live elsewhere (external drive, network share), add a volume entry in `docker-compose.yml`:
+```yaml
+- /your/path/to/files:/opt/mobiletrace/evidence:ro
+```
+Then restart with `docker-compose up -d`.
+
+### Recommended starting images
+
+| Image | OS | Size | Password | Source |
+|---|---|---|---|---|
+| BelkaCTF Day US | Android 9 | **618 MB** | `CwMglC7pLRHSkIlwoSqA` | https://dl.spbctf.com/BelkaDayUS_CTF_IMAGE.7z |
+| BelkaCTF 6 | iOS 16.3 | 2.0 GB | `0zj6EV6NYq0LVkyiU8s8` | https://dl.ctf.do/BelkaCTF_6_CASE240405_D201AP.zip |
+| Josh Hickman Android 9 | Android 9 | 4.2 GB | — | https://downloads.digitalcorpora.org/corpora/mobile/android_9.tar.gz |
+| Josh Hickman Android 11 | Android 11 | 10.2 GB | — | https://downloads.digitalcorpora.org/corpora/mobile/android_11.zip |
+| Josh Hickman iOS 16 | iOS 16.1.2 | 18.7 GB | — | https://digitalcorpora.s3.amazonaws.com/s3_browser.html#corpora/mobile/iOS16/ |
+
+Full catalogue of 140+ images (mobile, desktop, memory): **[The Evidence Locker](https://theevidencelocker.github.io/)**
+
+See [`docs/test-evidence.md`](docs/test-evidence.md) for download commands, MD5 hashes, and a step-by-step import walkthrough.
 
 ---
 

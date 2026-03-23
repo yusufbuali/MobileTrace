@@ -6,3 +6,11 @@ data/
 *.db
 config.yaml
 .worktrees/
+
+# Evidence archives — never commit large forensic images
+evidence/*
+!evidence/.gitkeep
+
+# Environment / secrets
+.env
+*.env
