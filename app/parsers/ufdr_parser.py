@@ -34,12 +34,20 @@ class UfdrParser(BaseParser):
             return self._parse_standalone(source_path, dest_dir)
 
     def _parse_via_aift(self, source_path: Path, dest_dir: Path) -> ParsedCase:
-        """Delegate to AIFT's battle-tested _extract_ufdr."""
+        """Delegate to AIFT's battle-tested _extract_ufdr, then augment with manual metadata."""
         import mobile_ingest as mi  # mounted at /aift_mobile
         result = mi.extract_evidence(source_path, dest_dir)
+        
+        device_info = result.device_info or {}
+        # Side-scan for timezone if missing from AIFT result
+        if "timezone" not in device_info:
+            manual_meta = self._extract_metadata(source_path)
+            if "timezone" in manual_meta:
+                device_info["timezone"] = manual_meta["timezone"]
+
         return ParsedCase(
             format="ufdr",
-            device_info=result.device_info or {},
+            device_info=device_info,
             raw_db_paths=list(result.extraction_path.rglob("*.db")) if result.extraction_path else [],
             warnings=[result.error] if result.error else [],
         )
@@ -77,6 +85,17 @@ class UfdrParser(BaseParser):
                     meta["model"] = (proj.findtext("model") or "Unknown").strip()
                     meta["imei"] = (proj.findtext("imei") or "Unknown").strip()
                     meta["os_version"] = (proj.findtext("platform") or "Unknown").strip()
+                    # Cellebrite timezone — try common field names
+                    tz = (
+                        proj.findtext("timezone")
+                        or proj.findtext("timeZone")
+                        or proj.findtext("deviceTimeZone")
+                        or proj.findtext("TimeZone")
+                        or proj.findtext("tzoffset")
+                        or proj.findtext("utcOffset")
+                    )
+                    if tz and tz.strip():
+                        meta["timezone"] = tz.strip()
                 elif "ufed_report.xml" in names:
                     root = ET.fromstring(zf.read("ufed_report.xml"))
                     gi = root.find(".//GeneralInfo")
@@ -84,6 +103,13 @@ class UfdrParser(BaseParser):
                         meta["model"] = (gi.findtext("DeviceModel") or "Unknown").strip()
                         meta["imei"] = (gi.findtext("IMEI") or "Unknown").strip()
                         meta["os_version"] = (gi.findtext("OS") or "Unknown").strip()
+                        tz = (
+                            gi.findtext("TimeZone")
+                            or gi.findtext("DeviceTimeZone")
+                            or gi.findtext("UtcOffset")
+                        )
+                        if tz and tz.strip():
+                            meta["timezone"] = tz.strip()
                 os_l = meta["os_version"].lower()
                 if any(t in os_l for t in _ANDROID_TOKENS):
                     meta["platform"] = "android"

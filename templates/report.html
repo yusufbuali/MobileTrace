@@ -172,6 +172,11 @@
     /* ── Linkage graph ────────────────────────────────────────── */
     .graph-container { border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel-alt); height: 420px; position: relative; overflow: hidden; }
 
+    /* ── Timezone disclaimer ───────────────────────────────────── */
+    .tz-disclaimer { padding: 10px 14px; border-radius: 6px; margin-top: 14px; font-size: 0.82rem; line-height: 1.5; }
+    .tz-known    { background: #0d2416; border-left: 3px solid #22c55e; color: #86efac; }
+    .tz-unknown  { background: #2d1f07; border-left: 3px solid #f59e0b; color: #fcd34d; }
+
     /* ── RTL helpers ──────────────────────────────────────────── */
     .evidence-hash, .ip-address, code, pre, .mono { direction: ltr; unicode-bidi: embed; text-align: left; font-family: 'Consolas', monospace; }
 
@@ -421,11 +426,44 @@
     <div class="report-header">
       <div class="report-title-block">
         <h1>&#128241; MobileTrace Forensic Report</h1>
-        <div class="report-subtitle">Generated: {{ generated_at }} &nbsp;·&nbsp; Case: {{ case.case_number or '—' }} &nbsp;·&nbsp; All timestamps UTC</div>
+        <div class="report-subtitle">Generated: {{ generated_at }} &nbsp;·&nbsp; Case: {{ case.case_number or '—' }}</div>
       </div>
       <div class="report-classification">Forensic Evidence</div>
     </div>
   </div>
+
+  <!-- ── Forensic Timestamp Advisory ────────────────────────────────────── -->
+  {% if case.device_info.timezone %}
+  <div class="panel" style="border-color: #22c55e; background: rgba(34,197,94,0.05);">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span style="font-size: 1.5rem;">&#10003;</span>
+      <div>
+        <strong style="color: #22c55e; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em;">Forensic Timestamp Advisory</strong>
+        <p style="margin-top: 2px; font-size: 0.85rem; color: #d1d5db;">
+          All timestamps are <strong>UTC</strong>. Device timezone captured as
+          <strong>{{ case.device_info.timezone }}</strong> — apply this offset when
+          correlating against CCTV footage, witness statements, or other time-sensitive evidence.
+        </p>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="panel" style="border-color: var(--warning); background: rgba(250, 204, 21, 0.05);">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span style="font-size: 1.5rem;">&#9888;</span>
+      <div>
+        <strong style="color: var(--warning); text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em;">Forensic Timestamp Advisory</strong>
+        <p style="margin-top: 2px; font-size: 0.85rem; color: #d1d5db;">
+          All timestamps are <strong>UTC</strong>. The device's local timezone was
+          <strong>not captured</strong> in this evidence archive. Investigators
+          <strong>must</strong> manually apply the known device-local offset when
+          comparing timestamps against CCTV footage, witness statements, or other
+          time-sensitive evidence.
+        </p>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   <!-- ── Case Information ───────────────────────────────────────────────────── -->
   <div class="panel">
@@ -473,7 +511,7 @@
           </td>
           <td class="mono evidence-hash" style="font-size:0.7rem">
             {% if ev.sha256 %}
-              <span title="{{ ev.sha256 }}">{{ ev.sha256[:16] }}&hellip;</span>
+              <span class="hash-full" title="{{ ev.sha256 }}">{{ ev.sha256 }}</span>
             {% else %}
               —
             {% endif %}

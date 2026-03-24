@@ -204,6 +204,9 @@ class FolderParser(BaseParser):
         result = ParsedCase(format="folder_android")
         warnings: list[str] = []
         result.device_info = {"platform": "android"}
+        tz = ap._read_timezone(db_paths.get("settings"))
+        if tz:
+            result.device_info["timezone"] = tz
         result.contacts = ap._read_contacts(db_paths.get("contacts"), warnings)
         result.contacts += ap._read_wa_contacts(db_paths.get("wa_ct"), warnings)
         result.messages = ap._read_sms(db_paths.get("sms"), warnings)

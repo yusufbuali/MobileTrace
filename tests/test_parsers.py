@@ -78,6 +78,52 @@ def test_ufdr_cannot_handle_non_ufdr(tmp_path):
     assert not UfdrParser().can_handle(f)
 
 
+def test_ufdr_captures_timezone_metadata_xml(tmp_path):
+    """UfdrParser._extract_metadata must capture timezone from Metadata.xml."""
+    ufdr = tmp_path / "test.ufdr"
+    with zipfile.ZipFile(ufdr, "w") as zf:
+        zf.writestr("Metadata.xml", """<?xml version="1.0"?>
+        <project>
+          <model>Samsung Galaxy S23</model>
+          <imei>111222333444555</imei>
+          <platform>Android 13</platform>
+          <timezone>Asia/Riyadh</timezone>
+        </project>""")
+    meta = UfdrParser()._extract_metadata(ufdr)
+    assert meta.get("timezone") == "Asia/Riyadh"
+
+
+def test_ufdr_captures_timezone_ufed_report(tmp_path):
+    """UfdrParser._extract_metadata must capture TimeZone from ufed_report.xml."""
+    ufdr = tmp_path / "test.ufdr"
+    with zipfile.ZipFile(ufdr, "w") as zf:
+        zf.writestr("ufed_report.xml", """<?xml version="1.0"?>
+        <UFEDReport>
+          <GeneralInfo>
+            <DeviceModel>iPhone 15</DeviceModel>
+            <IMEI>999888777666555</IMEI>
+            <OS>iOS 17.1</OS>
+            <TimeZone>America/New_York</TimeZone>
+          </GeneralInfo>
+        </UFEDReport>""")
+    meta = UfdrParser()._extract_metadata(ufdr)
+    assert meta.get("timezone") == "America/New_York"
+
+
+def test_ufdr_no_timezone_when_absent(tmp_path):
+    """UfdrParser._extract_metadata must not set timezone key if field is absent."""
+    ufdr = tmp_path / "test.ufdr"
+    with zipfile.ZipFile(ufdr, "w") as zf:
+        zf.writestr("Metadata.xml", """<?xml version="1.0"?>
+        <project>
+          <model>Generic Phone</model>
+          <imei>000</imei>
+          <platform>Android 9</platform>
+        </project>""")
+    meta = UfdrParser()._extract_metadata(ufdr)
+    assert "timezone" not in meta
+
+
 def make_mock_ufdr(path: Path) -> Path:
     """Create a minimal valid UFDR ZIP for testing."""
     ufdr = path / "test.ufdr"

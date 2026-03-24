@@ -42,6 +42,7 @@ _TARGETS: dict[str, str] = {
     "wa_ct":    "data/data/com.whatsapp/databases/wa.db",
     "telegram": "data/data/org.telegram.messenger/files/cache4.db",
     "signal":   "data/data/org.thoughtcrime.securesms/databases/signal.db",
+    "settings": "data/data/com.android.providers.settings/databases/settings.db",
 }
 
 # Android data-partition markers
@@ -157,6 +158,9 @@ class AndroidParser(BaseParser):
         warnings: list[str] = []
 
         result.device_info = {"platform": "android"}
+        tz = self._read_timezone(db_paths.get("settings"))
+        if tz:
+            result.device_info["timezone"] = tz
         result.contacts = self._read_contacts(db_paths.get("contacts"), warnings)
         result.contacts += self._read_wa_contacts(db_paths.get("wa_ct"), warnings)
         result.messages = self._read_sms(db_paths.get("sms"), warnings)
@@ -237,6 +241,25 @@ class AndroidParser(BaseParser):
         except Exception as exc:
             logger.warning("Cannot open %s: %s", path, exc)
             return None
+
+    def _read_timezone(self, path: Path | None) -> str | None:
+        """Read device timezone string from Android settings.db (secure/global/system tables)."""
+        conn = self._open_db(path)
+        if not conn:
+            return None
+        try:
+            for table in ("secure", "global", "system"):
+                try:
+                    row = conn.execute(
+                        f"SELECT value FROM {table} WHERE name='time_zone'"
+                    ).fetchone()
+                    if row and row["value"]:
+                        return row["value"]
+                except Exception:
+                    continue
+            return None
+        finally:
+            conn.close()
 
     # ── Parsers ───────────────────────────────────────────────────────────────
 
