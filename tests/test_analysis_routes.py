@@ -91,3 +91,25 @@ def test_analysis_stream_returns_sse_headers(client, case_with_messages):
     )
     assert resp.status_code == 200
     assert "text/event-stream" in resp.content_type
+
+
+def test_error_result_has_status_and_error_message(client, case_with_messages):
+    """Failed analysis rows must have status='error' and a non-empty error_message."""
+    import app.database as _db
+    from app.ai_providers import AIProviderError
+
+    db = _db.get_db()
+    # Insert a row that simulates a persisted error result
+    db.execute(
+        "INSERT INTO analysis_results (case_id, artifact_key, result, provider, status, error_message) "
+        "VALUES (?,?,?,?,?,?)",
+        (case_with_messages, "sms", "", "claude", "error", "rate limited"),
+    )
+    db.commit()
+
+    resp = client.get(f"/api/cases/{case_with_messages}/analysis")
+    assert resp.status_code == 200
+    results = resp.get_json()
+    error_rows = [r for r in results if r.get("status") == "error"]
+    assert len(error_rows) == 1
+    assert error_rows[0]["error_message"] == "rate limited"

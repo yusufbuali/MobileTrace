@@ -26,3 +26,10 @@ server:
   max_upload_mb: 2048
   database_path: "data/mobiletrace.db"
   cases_dir: "data/cases"
+
+analysis:
+  # Maximum records sent to the LLM per artifact type.
+  # Raise these on powerful hardware; lower them to reduce API costs.
+  max_messages_per_platform: 500
+  max_calls: 300
+  max_contacts: 300

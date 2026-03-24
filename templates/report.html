@@ -455,7 +455,7 @@
     <h2>Evidence Files</h2>
     <table class="data-table">
       <thead>
-        <tr><th>Format</th><th>Source</th><th>Status</th><th>Parsed At</th></tr>
+        <tr><th>Format</th><th>Source</th><th>Status</th><th>SHA-256</th><th>Parsed At</th></tr>
       </thead>
       <tbody>
       {% for ev in evidence_files %}
@@ -469,6 +469,13 @@
               <span class="badge" style="background:#2d0a0a;color:#f04438" title="{{ ev.parse_error or '' }}">error</span>
             {% else %}
               <span class="badge" style="background:#1a1f2e;color:#9fb1c7">{{ ev.parse_status or '—' }}</span>
+            {% endif %}
+          </td>
+          <td class="mono evidence-hash" style="font-size:0.7rem">
+            {% if ev.sha256 %}
+              <span title="{{ ev.sha256 }}">{{ ev.sha256[:16] }}&hellip;</span>
+            {% else %}
+              —
             {% endif %}
           </td>
           <td class="mono">{{ ev.parsed_at or '—' }}</td>

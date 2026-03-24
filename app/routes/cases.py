@@ -1,6 +1,7 @@
 """Case CRUD routes for MobileTrace."""
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import uuid
@@ -17,6 +18,14 @@ bp_cases = Blueprint("cases", __name__, url_prefix="/api")
 
 def _row_to_dict(row) -> dict:
     return dict(row) if row else {}
+
+
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 @bp_cases.get("/")
@@ -325,7 +334,8 @@ def upload_evidence(case_id: str):
     evidence_dir.mkdir(parents=True, exist_ok=True)
     safe_name = Path(f.filename).name
     dest_path = evidence_dir / safe_name
-    f.save(dest_path)
+    buf = f.stream.read()
+    dest_path.write_bytes(buf)
     signal_key = request.form.get("signal_key", "").strip()
     return _ingest_path(db, case_id, case_dir, dest_path, signal_key=signal_key)
 
@@ -334,9 +344,13 @@ def _ingest_path(db, case_id: str, case_dir: Path, source_path: Path, signal_key
     """Parse a file already on disk and store the result."""
     fmt = detect_format(source_path) or "unknown"
     ev_id = str(uuid.uuid4())
+    try:
+        sha256 = _sha256_file(source_path)
+    except OSError:
+        sha256 = None
     db.execute(
-        "INSERT INTO evidence_files (id, case_id, format, source_path, parse_status) VALUES (?,?,?,?,?)",
-        (ev_id, case_id, fmt, str(source_path), "parsing"),
+        "INSERT INTO evidence_files (id, case_id, format, source_path, parse_status, sha256) VALUES (?,?,?,?,?,?)",
+        (ev_id, case_id, fmt, str(source_path), "parsing", sha256),
     )
     db.commit()
 

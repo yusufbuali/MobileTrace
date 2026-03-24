@@ -117,7 +117,7 @@ def analysis_preview(case_id: str):
     # Evidence files
     evidence = [
         dict(r) for r in db.execute(
-            "SELECT id, format, source_path, parse_status FROM evidence_files WHERE case_id=?",
+            "SELECT id, format, source_path, parse_status, sha256 FROM evidence_files WHERE case_id=?",
             (case_id,),
         ).fetchall()
     ]
@@ -204,7 +204,7 @@ def get_analysis(case_id: str):
     import re as _re
     db = get_db()
     rows = db.execute(
-        "SELECT artifact_key, result, provider, created_at FROM analysis_results "
+        "SELECT artifact_key, result, provider, status, error_message, created_at FROM analysis_results "
         "WHERE case_id=? ORDER BY created_at ASC",
         (case_id,),
     ).fetchall()

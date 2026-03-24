@@ -37,6 +37,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "database_path": "data/mobiletrace.db",
         "cases_dir": "data/cases",
     },
+    "analysis": {
+        "max_messages_per_platform": 500,
+        "max_calls": 300,
+        "max_contacts": 300,
+    },
 }
 
 

@@ -290,11 +290,7 @@ function _renderBubble(msg, showOrigin) {
 
   const body = msg.body ? msg.body.trim() : "";
   if (body) {
-    if (_activeQuery) {
-      bubble.innerHTML = _highlightText(body, _activeQuery);
-    } else {
-      bubble.textContent = body;
-    }
+    _applyHighlight(bubble, body, _activeQuery);
   } else {
     const em = document.createElement("em");
     em.className = "msg-empty-media";
@@ -600,11 +596,19 @@ function _escHtml(s) {
   return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function _highlightText(text, query) {
-  if (!query) return _escHtml(text);
-  const escaped = _escHtml(text);
-  const qEsc = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return escaped.replace(new RegExp(`(${qEsc})`, "gi"), "<mark>$1</mark>");
+function _applyHighlight(el, text, query) {
+  el.textContent = "";
+  if (!query) { el.textContent = text; return; }
+  const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+  let last = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    el.appendChild(document.createTextNode(text.slice(last, m.index)));
+    const mark = document.createElement("mark");
+    mark.textContent = m[0];
+    el.appendChild(mark);
+    last = re.lastIndex;
+  }
+  el.appendChild(document.createTextNode(text.slice(last)));
 }
 
 function _fmtDate(ts) {

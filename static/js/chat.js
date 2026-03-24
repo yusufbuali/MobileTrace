@@ -621,7 +621,10 @@ export async function loadAnalysisResults(caseId) {
     details.appendChild(summary);
 
     const body = document.createElement("div");
-    if (p) {
+    if (r.status === "error") {
+      body.classList.add("markdown-output");
+      body.textContent = `Analysis failed: ${r.error_message || r.result || "(unknown error)"}`;
+    } else if (p) {
       _renderJsonAnalysis(p, body, r.artifact_key);
     } else {
       body.classList.add("markdown-output");

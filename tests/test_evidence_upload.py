@@ -69,3 +69,28 @@ def test_upload_case_not_found(client):
         content_type="multipart/form-data",
     )
     assert resp.status_code == 404
+
+
+def test_upload_stores_sha256(client):
+    """Uploaded evidence file must have its SHA-256 stored in evidence_files."""
+    import hashlib
+    import app.database as _db
+
+    file_bytes = make_ufdr_bytes()
+    expected_sha256 = hashlib.sha256(file_bytes).hexdigest()
+
+    r = client.post("/api/cases", json={"title": "Hash Test", "officer": "Z"})
+    case_id = r.get_json()["id"]
+    resp = client.post(
+        f"/api/cases/{case_id}/evidence",
+        data={"file": (io.BytesIO(file_bytes), "test.ufdr")},
+        content_type="multipart/form-data",
+    )
+    assert resp.status_code == 201
+
+    db = _db.get_db()
+    row = db.execute(
+        "SELECT sha256 FROM evidence_files WHERE case_id=?", (case_id,)
+    ).fetchone()
+    assert row is not None
+    assert row["sha256"] == expected_sha256

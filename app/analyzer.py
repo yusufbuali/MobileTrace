@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 import logging
 import re as _re
+import sqlite3 as _sqlite3
+import time
 import threading
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -52,9 +54,9 @@ _ARTIFACT_PROMPT_MAP = {
     "contacts":  "contacts_analysis.md",
 }
 
-_MSG_LIMIT = 500
-_CONTACT_LIMIT = 300
-_CALL_LIMIT = 300
+_MSG_LIMIT_DEFAULT = 500
+_CONTACT_LIMIT_DEFAULT = 300
+_CALL_LIMIT_DEFAULT = 300
 
 
 def _load_prompt(filename: str) -> str:
@@ -105,6 +107,10 @@ class MobileAnalyzer:
         self.config = config
         self.provider: AIProvider = create_provider(config)
         self._system_prompt = _load_system_prompt()
+        _acfg = config.get("analysis", {})
+        self._msg_limit = int(_acfg.get("max_messages_per_platform", _MSG_LIMIT_DEFAULT))
+        self._call_limit = int(_acfg.get("max_calls", _CALL_LIMIT_DEFAULT))
+        self._contact_limit = int(_acfg.get("max_contacts", _CONTACT_LIMIT_DEFAULT))
 
     def analyze_case(
         self,
@@ -152,17 +158,29 @@ class MobileAnalyzer:
                     }
                     logger.warning("Analysis failed for %s: %s", artifact_key, exc)
 
-                # Persist to DB (best-effort)
-                try:
-                    db.execute(
-                        "INSERT OR REPLACE INTO analysis_results (case_id, artifact_key, result, provider) VALUES (?,?,?,?)",
-                        (case_id, artifact_key,
-                         result.get("result", result.get("error", "")),
-                         result.get("provider", "")),
-                    )
-                    db.commit()
-                except Exception as exc:
-                    logger.warning("Could not persist analysis result for %s: %s", artifact_key, exc)
+                # Persist to DB with exponential-backoff retry on SQLITE_BUSY
+                for _attempt in range(5):
+                    try:
+                        db.execute(
+                            "INSERT OR REPLACE INTO analysis_results "
+                            "(case_id, artifact_key, result, provider, status, error_message) VALUES (?,?,?,?,?,?)",
+                            (case_id, artifact_key,
+                             result.get("result", ""),
+                             result.get("provider", ""),
+                             "error" if result.get("error") else "ok",
+                             result.get("error")),
+                        )
+                        db.commit()
+                        break
+                    except _sqlite3.OperationalError as exc:
+                        if "locked" in str(exc).lower() and _attempt < 4:
+                            time.sleep(0.05 * (2 ** _attempt))
+                        else:
+                            logger.warning("Could not persist analysis result for %s: %s", artifact_key, exc)
+                            break
+                    except Exception as exc:
+                        logger.warning("Could not persist analysis result for %s: %s", artifact_key, exc)
+                        break
 
                 results.append(result)
                 if callback:
@@ -246,20 +264,31 @@ class MobileAnalyzer:
                     result = future.result()
                     if result is None:
                         continue
-                    # Persist to DB (each thread uses its own connection via get_db())
+                    # Persist to DB with exponential-backoff retry on SQLITE_BUSY
                     worker_db = _get_db()
-                    try:
-                        worker_db.execute(
-                            "INSERT OR REPLACE INTO analysis_results "
-                            "(case_id, artifact_key, result, provider, run_id) VALUES (?,?,?,?,?)",
-                            (case_id, result["artifact_key"],
-                             result.get("result", result.get("error", "")),
-                             result.get("provider", ""),
-                             run_id),
-                        )
-                        worker_db.commit()
-                    except Exception as exc:
-                        logger.warning("Could not persist multi-model result: %s", exc)
+                    for _attempt in range(5):
+                        try:
+                            worker_db.execute(
+                                "INSERT OR REPLACE INTO analysis_results "
+                                "(case_id, artifact_key, result, provider, run_id, status, error_message) VALUES (?,?,?,?,?,?,?)",
+                                (case_id, result["artifact_key"],
+                                 result.get("result", ""),
+                                 result.get("provider", ""),
+                                 run_id,
+                                 "error" if result.get("error") else "ok",
+                                 result.get("error")),
+                            )
+                            worker_db.commit()
+                            break
+                        except _sqlite3.OperationalError as exc:
+                            if "locked" in str(exc).lower() and _attempt < 4:
+                                time.sleep(0.05 * (2 ** _attempt))
+                            else:
+                                logger.warning("Could not persist multi-model result: %s", exc)
+                                break
+                        except Exception as exc:
+                            logger.warning("Could not persist multi-model result: %s", exc)
+                            break
                 except Exception as exc:
                     logger.warning("Multi-model worker error: %s", exc)
 
@@ -453,7 +482,7 @@ class MobileAnalyzer:
             rows = db.execute(
                 "SELECT sender, recipient, body, timestamp, direction FROM messages "
                 "WHERE case_id=? AND platform=? ORDER BY timestamp ASC LIMIT ?",
-                (case_id, platform, _MSG_LIMIT),
+                (case_id, platform, self._msg_limit),
             ).fetchall()
             if rows:
                 total = db.execute(
@@ -471,7 +500,7 @@ class MobileAnalyzer:
         rows = db.execute(
             "SELECT number, direction, duration_s, timestamp, platform FROM call_logs "
             "WHERE case_id=? ORDER BY timestamp ASC LIMIT ?",
-            (case_id, _CALL_LIMIT),
+            (case_id, self._call_limit),
         ).fetchall()
         if rows:
             total = db.execute(
@@ -489,7 +518,7 @@ class MobileAnalyzer:
         rows = db.execute(
             "SELECT name, phone, email, source_app FROM contacts "
             "WHERE case_id=? ORDER BY name ASC LIMIT ?",
-            (case_id, _CONTACT_LIMIT),
+            (case_id, self._contact_limit),
         ).fetchall()
         if rows:
             total = db.execute(

@@ -67,9 +67,13 @@ class FolderParser(BaseParser):
             fname = Path(rel_path).name
             ios_by_name.setdefault(fname, []).append((key, rel_path))
 
-        for root, _dirs, files in os.walk(folder):
+        for root, _dirs, files in os.walk(folder, followlinks=False):
             for fname in files:
                 fpath = Path(root) / fname
+                try:
+                    fpath.resolve().relative_to(folder.resolve())
+                except ValueError:
+                    continue
                 ext = fpath.suffix.lower()
 
                 # ── Archive files ──
@@ -157,6 +161,7 @@ class FolderParser(BaseParser):
             fname = Path(rel_path).name
             for f in folder.rglob(fname):
                 try:
+                    f.resolve().relative_to(folder.resolve())
                     rel = f.relative_to(folder).as_posix()
                 except ValueError:
                     continue
@@ -171,6 +176,7 @@ class FolderParser(BaseParser):
             fname = Path(rel_path).name
             for f in folder.rglob(fname):
                 try:
+                    f.resolve().relative_to(folder.resolve())
                     rel = f.relative_to(folder).as_posix()
                 except ValueError:
                     continue
@@ -183,6 +189,7 @@ class FolderParser(BaseParser):
                 suffix_fname = Path(suffix).name
                 for f in folder.rglob(suffix_fname):
                     try:
+                        f.resolve().relative_to(folder.resolve())
                         rel = f.relative_to(folder).as_posix()
                     except ValueError:
                         continue

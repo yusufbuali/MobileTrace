@@ -171,3 +171,31 @@ def test_oxygen_parses_calls(tmp_path):
     result = OxygenParser().parse(ofb, tmp_path / "out")
     assert len(result.call_logs) == 1
     assert result.call_logs[0]["duration_s"] == 120
+
+
+# --- Symlink path traversal guard ---
+from app.parsers.folder_parser import FolderParser
+
+
+def test_scan_folder_skips_symlink_escape(tmp_path):
+    """scan_folder must not return paths that escape the evidence root via symlink."""
+    evidence_dir = tmp_path / "evidence"
+    evidence_dir.mkdir()
+
+    # Real archive file sitting outside the evidence root
+    outside_archive = tmp_path / "secret.zip"
+    outside_archive.write_bytes(b"PK\x03\x04")
+
+    # Symlink inside evidence_dir → points outside
+    link = evidence_dir / "escape.zip"
+    try:
+        link.symlink_to(outside_archive)
+    except (OSError, NotImplementedError):
+        import pytest
+        pytest.skip("Symlink creation not supported on this platform")
+
+    result = FolderParser.scan_folder(evidence_dir)
+
+    archive_paths = {a["path"] for a in result["archives"]}
+    assert str(link) not in archive_paths
+    assert str(outside_archive) not in archive_paths

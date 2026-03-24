@@ -207,6 +207,23 @@ def _migrate(conn: sqlite3.Connection) -> None:
         if "duplicate column name" not in str(e):
             raise
 
+    # Add status + error_message to analysis_results (idempotent)
+    for col, definition in [("status", "TEXT DEFAULT 'ok'"), ("error_message", "TEXT")]:
+        try:
+            conn.execute(f"ALTER TABLE analysis_results ADD COLUMN {col} {definition}")
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" not in str(e):
+                raise
+
+    # Add sha256 to evidence_files (idempotent)
+    try:
+        conn.execute("ALTER TABLE evidence_files ADD COLUMN sha256 TEXT")
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" not in str(e):
+            raise
+
 
 def init_db(db_path: str) -> None:
     global _db_path
