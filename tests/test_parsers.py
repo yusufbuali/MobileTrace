@@ -2,6 +2,41 @@
 from app.parsers.base import ParsedCase, BaseParser
 
 
+# --- Telegram UTF-8 string extractor ---
+
+def test_extract_utf8_strings_ascii():
+    from app.parsers.android_parser import _extract_utf8_strings
+    result = _extract_utf8_strings(b"\x00\x01Hello World\x00\x02", min_len=4)
+    assert any("Hello World" in s for s in result)
+
+
+def test_extract_utf8_strings_arabic():
+    from app.parsers.android_parser import _extract_utf8_strings
+    # Arabic "مرحبا" (Marhaba) encoded as UTF-8
+    arabic = "مرحبا بالعالم"
+    blob = b"\x00\x01" + arabic.encode("utf-8") + b"\x00\x02"
+    result = _extract_utf8_strings(blob, min_len=4)
+    joined = " ".join(result)
+    assert "مرحبا" in joined
+
+
+def test_extract_utf8_strings_cyrillic():
+    from app.parsers.android_parser import _extract_utf8_strings
+    cyrillic = "Привет мир"
+    blob = b"\xff\xfe" + cyrillic.encode("utf-8") + b"\x00\x00"
+    result = _extract_utf8_strings(blob, min_len=4)
+    joined = " ".join(result)
+    assert "Привет" in joined
+
+
+def test_extract_utf8_strings_filters_short():
+    from app.parsers.android_parser import _extract_utf8_strings
+    blob = b"\x00hi\x00" + b"long enough text" + b"\x00"
+    result = _extract_utf8_strings(blob, min_len=6)
+    assert not any(s == "hi" for s in result)
+    assert any("long enough" in s for s in result)
+
+
 def test_parsed_case_defaults():
     pc = ParsedCase(format="ufdr")
     assert pc.contacts == []

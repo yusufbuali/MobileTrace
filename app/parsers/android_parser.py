@@ -10,7 +10,7 @@ Parseable artifacts:
   - Contacts        : com.android.providers.contacts / contacts2.db
   - WhatsApp msgs   : com.whatsapp / msgstore.db  (old + new schema)
   - WhatsApp ctcts  : com.whatsapp / wa.db
-  - Telegram        : org.telegram.messenger / cache4.db  (text via regex)
+  - Telegram        : org.telegram.messenger / cache4.db  (UTF-8 string scan)
 
 Signal is SQLCipher-encrypted — skipped with a warning.
 """
@@ -68,10 +68,31 @@ def _s_to_iso(s: int | None) -> str:
         return str(s)
 
 
-def _extract_strings(blob: bytes, min_len: int = 4) -> list[str]:
-    """Pull printable ASCII strings from a binary blob."""
-    return [m.decode("ascii", errors="ignore")
-            for m in re.findall(rb"[\x20-\x7e]{%d,}" % min_len, blob)]
+def _extract_utf8_strings(blob: bytes, min_len: int = 4) -> list[str]:
+    """Extract printable string segments from a binary blob, supporting full Unicode (UTF-8).
+
+    Decodes the blob as UTF-8 (U+FFFD for undecodable bytes) then splits on
+    replacement characters and non-printable bytes.  This correctly recovers
+    Arabic, Chinese, Cyrillic, and other non-ASCII text that the old ASCII-only
+    regex silently discarded.
+    """
+    text = blob.decode("utf-8", errors="replace")
+    segments: list[str] = []
+    current: list[str] = []
+    for ch in text:
+        if ch == "\ufffd" or (not ch.isprintable() and ch not in ("\n", "\t")):
+            if len(current) >= min_len:
+                s = "".join(current).strip()
+                if len(s) >= min_len:
+                    segments.append(s)
+            current = []
+        else:
+            current.append(ch)
+    if len(current) >= min_len:
+        s = "".join(current).strip()
+        if len(s) >= min_len:
+            segments.append(s)
+    return segments
 
 
 class AndroidParser(BaseParser):
@@ -419,7 +440,7 @@ class AndroidParser(BaseParser):
                 if not isinstance(blob, bytes):
                     continue
                 # Extract readable text strings from TLV binary
-                strings = _extract_strings(blob, min_len=6)
+                strings = _extract_utf8_strings(blob, min_len=6)
                 # Filter out noise: keep strings that look like messages
                 text_parts = [
                     s for s in strings

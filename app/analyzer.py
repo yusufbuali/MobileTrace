@@ -481,7 +481,7 @@ class MobileAnalyzer:
         for platform in ("sms", "whatsapp", "telegram", "signal"):
             rows = db.execute(
                 "SELECT sender, recipient, body, timestamp, direction FROM messages "
-                "WHERE case_id=? AND platform=? ORDER BY timestamp ASC LIMIT ?",
+                "WHERE case_id=? AND platform=? ORDER BY timestamp DESC LIMIT ?",
                 (case_id, platform, self._msg_limit),
             ).fetchall()
             if rows:
@@ -490,16 +490,18 @@ class MobileAnalyzer:
                     (case_id, platform),
                 ).fetchone()[0]
                 pct = (len(rows) / total * 100) if total else 100.0
+                # Reverse to chronological order after DESC fetch (newest-first window)
+                rows = list(reversed(rows))
                 coverage = (
                     f"## Data Coverage\n"
-                    f"Records provided: {len(rows)} of {total} total ({pct:.1f}%)\n\n"
+                    f"Records provided: {len(rows)} of {total} total ({pct:.1f}%) — most recent\n\n"
                 )
                 artifacts[platform] = coverage + _format_messages(rows)
 
         # Call logs
         rows = db.execute(
             "SELECT number, direction, duration_s, timestamp, platform FROM call_logs "
-            "WHERE case_id=? ORDER BY timestamp ASC LIMIT ?",
+            "WHERE case_id=? ORDER BY timestamp DESC LIMIT ?",
             (case_id, self._call_limit),
         ).fetchall()
         if rows:
@@ -508,9 +510,10 @@ class MobileAnalyzer:
                 (case_id,),
             ).fetchone()[0]
             pct = (len(rows) / total * 100) if total else 100.0
+            rows = list(reversed(rows))
             coverage = (
                 f"## Data Coverage\n"
-                f"Records provided: {len(rows)} of {total} total ({pct:.1f}%)\n\n"
+                f"Records provided: {len(rows)} of {total} total ({pct:.1f}%) — most recent\n\n"
             )
             artifacts["call_logs"] = coverage + _format_calls(rows)
 

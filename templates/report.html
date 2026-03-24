@@ -421,7 +421,7 @@
     <div class="report-header">
       <div class="report-title-block">
         <h1>&#128241; MobileTrace Forensic Report</h1>
-        <div class="report-subtitle">Generated: {{ generated_at }} &nbsp;·&nbsp; Case: {{ case.case_number or '—' }}</div>
+        <div class="report-subtitle">Generated: {{ generated_at }} &nbsp;·&nbsp; Case: {{ case.case_number or '—' }} &nbsp;·&nbsp; All timestamps UTC</div>
       </div>
       <div class="report-classification">Forensic Evidence</div>
     </div>
@@ -520,7 +520,7 @@
                   <div class="msg-sender">{{ msg.sender }}</div>
                 {% endif %}
                 {{ msg.body or '[no body]' }}
-                <div class="msg-time">{{ msg.timestamp or '' }}</div>
+                <div class="msg-time">{{ (msg.timestamp or '')[:19] | replace('T',' ') }}{% if msg.timestamp %} UTC{% endif %}</div>
               </div>
             {% endfor %}
           </div>
@@ -563,7 +563,7 @@
             </span>
           </td>
           <td><span class="badge badge-{{ a.platform or 'unknown' }}">{{ a.platform or '—' }}</span></td>
-          <td class="mono">{{ a.timestamp[:16] if a.timestamp else '—' }}</td>
+          <td class="mono">{{ (a.timestamp[:19] | replace('T',' ')) + ' UTC' if a.timestamp else '—' }}</td>
           <td>{{ a.direction or '—' }}</td>
           <td class="mono">{{ a.sender or '—' }}</td>
           <td style="max-width:300px;word-break:break-word">{{ a.body or '[no body]' }}</td>
@@ -794,7 +794,7 @@
       <tbody>
       {% for m in messages %}
         <tr>
-          <td class="mono" style="font-size:0.72rem;word-break:break-all">{{ (m.timestamp or '—')[:16] | replace('T',' ') }}</td>
+          <td class="mono" style="font-size:0.72rem;word-break:break-all">{{ ((m.timestamp or '')[:19] | replace('T',' ')) + ' UTC' if m.timestamp else '—' }}</td>
           <td><span class="badge badge-{{ m.platform }}">{{ m.platform }}</span></td>
           <td><span class="badge badge-{{ 'in' if m.direction == 'incoming' else 'out' }}">{{ '↓' if m.direction == 'incoming' else '↑' }}</span></td>
           <td class="mono" style="font-size:0.72rem;word-break:break-all">{{ m.sender or '—' }}</td>
@@ -836,7 +836,7 @@
       <tbody>
       {% for c in calls %}
         <tr>
-          <td class="mono" style="white-space:nowrap">{{ c.timestamp or '—' }}</td>
+          <td class="mono" style="white-space:nowrap">{{ ((c.timestamp or '')[:19] | replace('T',' ')) + ' UTC' if c.timestamp else '—' }}</td>
           <td class="mono">{{ c.number or '—' }}</td>
           <td><span class="badge badge-{{ c.direction }}">{{ c.direction }}</span></td>
           <td>{{ c.duration_s }}</td>

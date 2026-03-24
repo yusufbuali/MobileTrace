@@ -28,7 +28,7 @@ def _build_report_context(db, case_id: str) -> dict | None:
 
     messages = db.execute(
         "SELECT platform, direction, sender, recipient, body, timestamp "
-        "FROM messages WHERE case_id=? ORDER BY timestamp ASC LIMIT 1000",
+        "FROM messages WHERE case_id=? ORDER BY timestamp ASC",
         (case_id,),
     ).fetchall()
 
@@ -63,7 +63,7 @@ def _build_report_context(db, case_id: str) -> dict | None:
         analysis.append(row)
 
     evidence_files = db.execute(
-        "SELECT format, source_path, parse_status, parse_error, parsed_at "
+        "SELECT format, source_path, parse_status, parse_error, parsed_at, sha256 "
         "FROM evidence_files WHERE case_id=? ORDER BY rowid ASC",
         (case_id,),
     ).fetchall()
@@ -346,7 +346,7 @@ def calls_count(case_id: str):
 def list_evidence(case_id: str):
     db = get_db()
     rows = db.execute(
-        "SELECT id, format, source_path, parse_status, parse_error, parsed_at "
+        "SELECT id, format, source_path, parse_status, parse_error, parsed_at, sha256 "
         "FROM evidence_files WHERE case_id=? ORDER BY rowid ASC",
         (case_id,),
     ).fetchall()
